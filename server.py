@@ -19,6 +19,9 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger("vera-bot")
 
 app = Flask(__name__)
+@app.route("/", methods=["GET"])
+def root():
+    return jsonify({"message": "Vera Bot is live", "health": "/v1/healthz", "metadata": "/v1/metadata"})
 START_TIME = time.time()
 
 # ---------------------------------------------------------------------------
@@ -362,17 +365,17 @@ def healthz():
 def metadata():
     return jsonify({
         "team_name": "Vera Decision Engine",
-        "team_members": ["Manorama"],
-        "model": "claude-sonnet-4-20250514",
+        "team_members": ["Disha Sikka"],
+        "model": "mistral-small-latest",
         "approach": (
             "3-layer architecture: (1) pure-logic decision engine selects intent, CTA shape, "
             "and compulsion levers per trigger kind; (2) context builder assembles grounded "
             "fact block — only verified numbers from the 4 contexts, no hallucination; "
-            "(3) Claude at temperature=0 composes the final message constrained strictly to "
+            "(3) Mistral at temperature=0 composes the final message constrained strictly to "
             "the fact block. Auto-reply detection, intent handoff, and graceful exit are "
             "handled as deterministic routing rules, not LLM guesses."
         ),
-        "contact_email": "participant@example.com",
+        "contact_email": "disha.sikka77@gmail.com",
         "version": "1.0.0",
         "submitted_at": datetime.now(timezone.utc).isoformat(),
     })
