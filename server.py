@@ -70,6 +70,10 @@ def root():
             <h3><span class="method post">POST</span> /v1/reply</h3>
             <p>Handle merchant reply — send / wait / end</p>
         </div>
+        <a class="card" href="/v1/test" style="border-color:#6366f1;background:#faf5ff;">
+            <h3><span class="method get" style="background:#ede9fe;color:#7c3aed;">GET</span> /v1/test</h3>
+            <p>🧪 See a live generated message in your browser</p>
+        </a>
     </div>
 
     <div class="info">
@@ -119,6 +123,104 @@ def resolve_trigger(trigger_id: str):
     customer_id = trg.get("customer_id")
     customer = get_context("customer", customer_id) if customer_id else None
     return trg, merchant, category, customer
+
+
+# ---------------------------------------------------------------------------
+# GET /v1/test — browser-friendly demo page
+# ---------------------------------------------------------------------------
+
+@app.route("/v1/test", methods=["GET"])
+def test_compose():
+    """Generates a real message live and shows it in the browser."""
+    import os, json
+    from pathlib import Path
+
+    # Load seed data from dataset folder
+    base = Path(__file__).parent
+    dataset = base / "dataset"
+
+    try:
+        merchants = json.load(open(dataset / "merchants_seed.json"))["merchants"]
+        triggers  = json.load(open(dataset / "triggers_seed.json"))["triggers"]
+        dentists  = json.load(open(dataset / "categories" / "dentists.json"))
+
+        # Pick merchant + trigger (can change index for different examples)
+        merchant = merchants[0]
+        trigger  = triggers[0]
+
+        result = bot.compose(dentists, merchant, trigger, customer=None)
+        body    = result["body"]
+        cta     = result["cta"]
+        send_as = result["send_as"]
+        rationale = result["rationale"]
+        status  = "success"
+        error   = ""
+    except Exception as e:
+        body = rationale = ""
+        cta = send_as = ""
+        status = "error"
+        error = str(e)
+
+    color = "#22c55e" if status == "success" else "#ef4444"
+    label = "✅ Message Generated" if status == "success" else "❌ Error"
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Vera Bot — Live Test</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; max-width: 750px; margin: 60px auto; padding: 0 20px; background: #f9f9f9; }}
+        h1 {{ color: #1a1a1a; }}
+        a.back {{ color: #6366f1; font-size: 14px; text-decoration: none; }}
+        .status {{ display: inline-block; background: {color}; color: white; padding: 4px 14px; border-radius: 20px; font-size: 13px; margin-bottom: 24px; }}
+        .card {{ background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; margin-bottom: 16px; }}
+        .card h3 {{ margin: 0 0 12px; font-size: 14px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }}
+        .message {{ font-size: 16px; line-height: 1.7; color: #1a1a1a; white-space: pre-wrap; }}
+        .pill {{ display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-right: 8px; }}
+        .vera {{ background: #dbeafe; color: #1d4ed8; }}
+        .open {{ background: #fef9c3; color: #854d0e; }}
+        .binary {{ background: #fee2e2; color: #991b1b; }}
+        .rationale {{ font-size: 13px; color: #6b7280; line-height: 1.6; }}
+        .context {{ font-size: 12px; color: #9ca3af; }}
+        .btn {{ display: inline-block; margin-top: 20px; background: #6366f1; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-size: 14px; }}
+        .btn:hover {{ background: #4f46e5; }}
+        .error {{ background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; color: #991b1b; font-size: 14px; }}
+    </style>
+</head>
+<body>
+    <a class="back" href="/">← Back to home</a>
+    <h1>Live Message Test</h1>
+    <div class="status">{label}</div>
+
+    {"f" if status == "error" else ""}
+
+    {"<div class=\"error\"><strong>Error:</strong> " + error + "</div>" if status == "error" else f"""
+    <div class="card">
+        <h3>Generated WhatsApp Message</h3>
+        <div class="message">{body}</div>
+    </div>
+
+    <div class="card">
+        <h3>Message Properties</h3>
+        <span class="pill vera">{send_as}</span>
+        <span class="pill {'binary' if cta == 'binary_yes_stop' else 'open'}">{cta}</span>
+    </div>
+
+    <div class="card">
+        <h3>Rationale</h3>
+        <div class="rationale">{rationale}</div>
+    </div>
+
+    <div class="context">
+        Merchant: Dr. Meera's Dental Clinic, Delhi &nbsp;|&nbsp;
+        Trigger: research_digest (JIDA Oct 2026) &nbsp;|&nbsp;
+        Model: mistral-small-latest
+    </div>
+    """}
+
+    <a class="btn" href="/v1/test">🔄 Generate Again</a>
+</body>
+</html>"""
 
 
 # ---------------------------------------------------------------------------
