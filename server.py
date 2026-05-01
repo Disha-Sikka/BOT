@@ -224,7 +224,9 @@ def test_compose():
     <h1>Live Message Test</h1>
     <div class="status">{label}</div>
 
-    {f'<div class="error"><strong>Error:</strong> {error}</div>' if status == "error" else f'''
+    {"f" if status == "error" else ""}
+
+    {"<div class=\"error\"><strong>Error:</strong> " + error + "</div>" if status == "error" else f"""
     <div class="card">
         <h3>Generated WhatsApp Message</h3>
         <div class="message">{body}</div>
@@ -246,314 +248,9 @@ def test_compose():
         Trigger: research_digest (JIDA Oct 2026) &nbsp;|&nbsp;
         Model: mistral-small-latest
     </div>
-    '''}
+    """}
 
     <a class="btn" href="/v1/test">🔄 Generate Again</a>
-</body>
-</html>"""
-
-
-
-
-# ---------------------------------------------------------------------------
-# GET /demo — Interactive API Explorer
-# ---------------------------------------------------------------------------
-
-@app.route("/demo", methods=["GET"])
-def demo_page():
-    return """<!DOCTYPE html>
-<html>
-<head>
-    <title>API Demo Explorer</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: Arial, sans-serif; background: #f8fafc; color: #334155; }
-        .header { background: #1e293b; color: white; padding: 20px; text-align: center; }
-        .header h1 { margin-bottom: 8px; }
-        .header p { opacity: 0.8; font-size: 14px; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-        .section { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .section h2 { color: #1e293b; margin-bottom: 16px; font-size: 20px; }
-        .endpoint { background: #f1f5f9; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
-        .endpoint .method { display: inline-block; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: bold; margin-right: 12px; }
-        .get { background: #dcfce7; color: #166534; }
-        .post { background: #dbeafe; color: #1e40af; }
-        .endpoint .path { font-family: monospace; font-size: 14px; color: #374151; }
-        .endpoint .desc { font-size: 13px; color: #6b7280; margin-top: 4px; }
-        .form-group { margin-bottom: 16px; }
-        .form-group label { display: block; font-weight: 500; margin-bottom: 4px; color: #374151; }
-        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
-        .form-group textarea { min-height: 120px; font-family: monospace; }
-        .btn { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; }
-        .btn:hover { background: #2563eb; }
-        .btn.secondary { background: #6b7280; }
-        .btn.secondary:hover { background: #4b5563; }
-        .response { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-top: 16px; font-family: monospace; font-size: 13px; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
-        .tabs { display: flex; margin-bottom: 20px; }
-        .tab { padding: 10px 20px; background: #e2e8f0; border: none; cursor: pointer; font-size: 14px; }
-        .tab.active { background: #3b82f6; color: white; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .quick-fill { margin-top: 8px; }
-        .quick-fill button { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-right: 8px; }
-        .quick-fill button:hover { background: #e5e7eb; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>🔬 Vera Bot API Explorer</h1>
-        <p>Interactive testing of all magicpin AI Challenge endpoints</p>
-    </div>
-
-    <div class="container">
-        <div class="tabs">
-            <button class="tab active" onclick="showTab('health')">Health Check</button>
-            <button class="tab" onclick="showTab('metadata')">Metadata</button>
-            <button class="tab" onclick="showTab('context')">Push Context</button>
-            <button class="tab" onclick="showTab('tick')">Tick (Wake Up)</button>
-            <button class="tab" onclick="showTab('reply')">Reply Handler</button>
-        </div>
-
-        <div id="health" class="tab-content active">
-            <div class="section">
-                <h2>GET /v1/healthz</h2>
-                <p>Liveness check — returns server status and loaded context counts.</p>
-                <button class="btn" onclick="callHealth()">Test Health Check</button>
-                <div id="health-response" class="response"></div>
-            </div>
-        </div>
-
-        <div id="metadata" class="tab-content">
-            <div class="section">
-                <h2>GET /v1/metadata</h2>
-                <p>Team information, model details, and approach description.</p>
-                <button class="btn" onclick="callMetadata()">Get Metadata</button>
-                <div id="metadata-response" class="response"></div>
-            </div>
-        </div>
-
-        <div id="context" class="tab-content">
-            <div class="section">
-                <h2>POST /v1/context</h2>
-                <p>Push context data (categories, merchants, customers, triggers) to the bot.</p>
-
-                <div class="form-group">
-                    <label>Scope:</label>
-                    <select id="context-scope">
-                        <option value="category">category</option>
-                        <option value="merchant">merchant</option>
-                        <option value="customer">customer</option>
-                        <option value="trigger">trigger</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Context ID:</label>
-                    <input type="text" id="context-id" placeholder="e.g., dentists, m_001, c_001, trg_001">
-                </div>
-
-                <div class="form-group">
-                    <label>Payload (JSON):</label>
-                    <textarea id="context-payload" placeholder='{"key": "value"}'></textarea>
-                </div>
-
-                <div class="quick-fill">
-                    <button onclick="fillDentistCategory()">Fill: Dentist Category</button>
-                    <button onclick="fillDentistMerchant()">Fill: Dentist Merchant</button>
-                    <button onclick="fillDentistTrigger()">Fill: Research Trigger</button>
-                </div>
-
-                <button class="btn" onclick="callContext()">Push Context</button>
-                <div id="context-response" class="response"></div>
-            </div>
-        </div>
-
-        <div id="tick" class="tab-content">
-            <div class="section">
-                <h2>POST /v1/tick</h2>
-                <p>Wake up the bot — it will decide what messages to send based on available triggers.</p>
-
-                <div class="form-group">
-                    <label>Available Trigger IDs (comma-separated):</label>
-                    <input type="text" id="tick-triggers" placeholder="trg_001, trg_002">
-                </div>
-
-                <button class="btn" onclick="callTick()">Wake Up Bot</button>
-                <div id="tick-response" class="response"></div>
-            </div>
-        </div>
-
-        <div id="reply" class="tab-content">
-            <div class="section">
-                <h2>POST /v1/reply</h2>
-                <p>Handle merchant replies in ongoing conversations.</p>
-
-                <div class="form-group">
-                    <label>Conversation ID:</label>
-                    <input type="text" id="reply-conv-id" placeholder="conv_abc123">
-                </div>
-
-                <div class="form-group">
-                    <label>Merchant ID:</label>
-                    <input type="text" id="reply-merchant-id" placeholder="m_001">
-                </div>
-
-                <div class="form-group">
-                    <label>Message:</label>
-                    <input type="text" id="reply-message" placeholder="Yes, please send the details">
-                </div>
-
-                <div class="form-group">
-                    <label>Turn Number:</label>
-                    <input type="number" id="reply-turn" value="2" min="1">
-                </div>
-
-                <button class="btn" onclick="callReply()">Send Reply</button>
-                <div id="reply-response" class="response"></div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        function showTab(tabName) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector(`button[onclick="showTab('${tabName}')"]`).classList.add('active');
-            document.getElementById(tabName).classList.add('active');
-        }
-
-        async function callAPI(endpoint, method = 'GET', body = null) {
-            try {
-                const options = { method };
-                if (body) {
-                    options.headers = { 'Content-Type': 'application/json' };
-                    options.body = JSON.stringify(body);
-                }
-                const response = await fetch(endpoint, options);
-                const data = await response.json();
-                return { status: response.status, data };
-            } catch (e) {
-                return { status: 0, data: { error: e.message } };
-            }
-        }
-
-        async function callHealth() {
-            const result = await callAPI('/v1/healthz');
-            document.getElementById('health-response').textContent =
-                `Status: ${result.status}\\n\\n${JSON.stringify(result.data, null, 2)}`;
-        }
-
-        async function callMetadata() {
-            const result = await callAPI('/v1/metadata');
-            document.getElementById('metadata-response').textContent =
-                `Status: ${result.status}\\n\\n${JSON.stringify(result.data, null, 2)}`;
-        }
-
-        async function callContext() {
-            const scope = document.getElementById('context-scope').value;
-            const contextId = document.getElementById('context-id').value;
-            let payload;
-            try {
-                payload = JSON.parse(document.getElementById('context-payload').value);
-            } catch (e) {
-                alert('Invalid JSON in payload');
-                return;
-            }
-
-            const body = {
-                scope,
-                context_id: contextId,
-                version: Math.floor(Date.now() / 1000),
-                payload,
-                delivered_at: new Date().toISOString()
-            };
-
-            const result = await callAPI('/v1/context', 'POST', body);
-            document.getElementById('context-response').textContent =
-                `Status: ${result.status}\\n\\n${JSON.stringify(result.data, null, 2)}`;
-        }
-
-        async function callTick() {
-            const triggers = document.getElementById('tick-triggers').value
-                .split(',')
-                .map(t => t.trim())
-                .filter(t => t);
-
-            const body = {
-                now: new Date().toISOString(),
-                available_triggers: triggers
-            };
-
-            const result = await callAPI('/v1/tick', 'POST', body);
-            document.getElementById('tick-response').textContent =
-                `Status: ${result.status}\\n\\n${JSON.stringify(result.data, null, 2)}`;
-        }
-
-        async function callReply() {
-            const body = {
-                conversation_id: document.getElementById('reply-conv-id').value,
-                merchant_id: document.getElementById('reply-merchant-id').value,
-                customer_id: null,
-                from_role: 'merchant',
-                message: document.getElementById('reply-message').value,
-                received_at: new Date().toISOString(),
-                turn_number: parseInt(document.getElementById('reply-turn').value)
-            };
-
-            const result = await callAPI('/v1/reply', 'POST', body);
-            document.getElementById('reply-response').textContent =
-                `Status: ${result.status}\\n\\n${JSON.stringify(result.data, null, 2)}`;
-        }
-
-        function fillDentistCategory() {
-            document.getElementById('context-scope').value = 'category';
-            document.getElementById('context-id').value = 'dentists';
-            document.getElementById('context-payload').value = JSON.stringify({
-                "slug": "dentists",
-                "voice": {"tone": "peer_clinical", "salutation": "Dr. {first_name}", "vocab_no": ["guaranteed", "100% safe"]},
-                "offer_catalog": [{"title": "Dental Cleaning @ ₹299"}, {"title": "Teeth Whitening @ ₹1,499"}],
-                "peer_stats": {"avg_ctr": 0.030, "avg_rating": 4.4, "avg_review_count": 62, "avg_views_30d": 1820},
-                "digest": [{"id": "d_jida", "source": "JIDA Oct 2026 p.14", "title": "3-month fluoride recall cuts caries 38% vs 6-month", "trial_n": 2100, "patient_segment": "high_risk_adults", "summary": "38% lower caries recurrence with 3-month recall in high-risk adults."}],
-                "seasonal_beats": [],
-                "trend_signals": []
-            }, null, 2);
-        }
-
-        function fillDentistMerchant() {
-            document.getElementById('context-scope').value = 'merchant';
-            document.getElementById('context-id').value = 'm_demo_dentist';
-            document.getElementById('context-payload').value = JSON.stringify({
-                "merchant_id": "m_demo_dentist",
-                "category_slug": "dentists",
-                "identity": {"name": "Dr. Meera Dental Clinic", "owner_first_name": "Meera", "city": "Delhi", "locality": "Lajpat Nagar", "languages": ["en", "hi"], "verified": true},
-                "performance": {"views": 2410, "calls": 18, "ctr": 0.021, "leads": 9, "delta_7d": {"views_pct": 0.18, "calls_pct": -0.05, "ctr_pct": 0.02}},
-                "offers": [{"title": "Dental Cleaning @ ₹299", "status": "active"}],
-                "signals": ["stale_posts:22d", "ctr_below_peer_median", "high_risk_adult_cohort"],
-                "subscription": {"status": "active", "plan": "Pro", "days_remaining": 82},
-                "customer_aggregate": {"total_unique_ytd": 540, "lapsed_180d_plus": 78, "retention_6mo_pct": 0.38, "high_risk_adult_count": 124},
-                "review_themes": [],
-                "conversation_history": []
-            }, null, 2);
-        }
-
-        function fillDentistTrigger() {
-            document.getElementById('context-scope').value = 'trigger';
-            document.getElementById('context-id').value = 'trg_demo_dentist';
-            document.getElementById('context-payload').value = JSON.stringify({
-                "id": "trg_demo_dentist",
-                "scope": "merchant",
-                "kind": "research_digest",
-                "source": "external",
-                "merchant_id": "m_demo_dentist",
-                "customer_id": null,
-                "payload": {"category": "dentists", "top_item_id": "d_jida"},
-                "urgency": 2,
-                "suppression_key": "demo:dentist:research",
-                "expires_at": "2026-12-01T00:00:00Z"
-            }, null, 2);
-        }
-    </script>
 </body>
 </html>"""
 
@@ -736,40 +433,32 @@ async function startConversation() {
     addSystem('Starting conversation...');
 
     const m = MERCHANTS[currentMerchant];
-    await pushContext('category', m.category.slug, m.category);
-    await pushContext('merchant', m.merchant.merchant_id, m.merchant);
-    const uniqueTrigId = m.trigger.id + '_' + Date.now();
-    const trigPayload = {...m.trigger, id: uniqueTrigId, suppression_key: m.trigger.suppression_key + '_' + Date.now()};
-    await pushContext('trigger', uniqueTrigId, trigPayload);
-    m._lastTrigId = uniqueTrigId;
-
-    addSystem('Context loaded — Vera is generating message via Mistral AI (may take 10-20s)...');
+    addSystem('Connecting to Vera via Mistral AI (10-20s)...');
     showTyping();
 
     try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 35000);
+        const timeout = setTimeout(() => controller.abort(), 55000);
 
-        const tickRes = await fetch('/v1/tick', {
+        const tickRes = await fetch('/v1/chat_message', {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({now: new Date().toISOString(), available_triggers: [m._lastTrigId]}),
+            body: JSON.stringify({category: m.category, merchant: m.merchant, trigger: m.trigger, customer: null}),
             signal: controller.signal
         });
         clearTimeout(timeout);
-        const tickData = await tickRes.json();
+        const action = await tickRes.json();
         hideTyping();
 
-        if (tickData.actions && tickData.actions.length > 0) {
-            const action = tickData.actions[0];
-            convId = action.conversation_id;
+        if (action.error) {
+            document.getElementById('messages').innerHTML = '';
+            addSystem('Error: ' + action.error + ' — Click Start fresh chat.');
+        } else {
+            convId = 'conv_' + Date.now();
             const isBinary = action.cta === 'binary_yes_stop';
             document.getElementById('messages').innerHTML = '';
             addMsg(action.body, 'vera', isBinary);
             initialized = true;
-        } else {
-            document.getElementById('messages').innerHTML = '';
-            addSystem('Vera is thinking... click "Start fresh chat" to try again.');
         }
     } catch(e) {
         hideTyping();
@@ -794,18 +483,16 @@ async function sendMsg() {
 
     try {
         const ctrl2 = new AbortController();
-        const t2 = setTimeout(() => ctrl2.abort(), 35000);
-        const res = await fetch('/v1/reply', {
+        const t2 = setTimeout(() => ctrl2.abort(), 55000);
+        const m2 = MERCHANTS[currentMerchant];
+        const res = await fetch('/v1/chat_reply', {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
             body: JSON.stringify({
-                conversation_id: convId || 'conv_demo',
-                merchant_id: MERCHANTS[currentMerchant].merchant.merchant_id,
-                customer_id: null,
-                from_role: 'merchant',
-                message: text,
-                received_at: new Date().toISOString(),
-                turn_number: turnNumber
+                category: m2.category,
+                merchant: m2.merchant,
+                trigger: m2.trigger,
+                message: text
             }),
             signal: ctrl2.signal
         });
@@ -846,6 +533,89 @@ window.onload = () => startConversation();
 </script>
 </body>
 </html>"""
+
+
+@app.route("/v1/chat_message", methods=["POST"])
+def chat_message():
+    """Single endpoint for the chat UI — handles context + compose in one call."""
+    data = request.get_json(force=True)
+    category = data.get("category")
+    merchant = data.get("merchant") 
+    trigger = data.get("trigger")
+    customer = data.get("customer")
+    
+    if not category or not merchant or not trigger:
+        return jsonify({"error": "Missing category, merchant, or trigger"}), 400
+    
+    try:
+        result = bot.compose(category, merchant, trigger, customer)
+        return jsonify({
+            "body": result["body"],
+            "cta": result["cta"],
+            "send_as": result["send_as"],
+            "suppression_key": result["suppression_key"],
+            "rationale": result["rationale"],
+        })
+    except Exception as e:
+        logger.error(f"chat_message failed: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/v1/chat_reply", methods=["POST"])
+def chat_reply():
+    """Handle reply in chat UI — calls bot.compose with merchant_reply context."""
+    data = request.get_json(force=True)
+    category = data.get("category")
+    merchant = data.get("merchant")
+    trigger = data.get("trigger")
+    message = data.get("message", "")
+    
+    if not category or not merchant or not trigger:
+        return jsonify({"error": "Missing data"}), 400
+
+    # Detect intent
+    msg_lower = message.lower().strip()
+    exit_words = ["not interested", "nahi chahiye", "band karo", "stop", "mat bhejo"]
+    accept_words = ["yes", "haan", "bilkul", "ok", "sure", "go ahead", "karo", "bhejo", "theek"]
+    
+    if any(w in msg_lower for w in exit_words):
+        return jsonify({"action": "end", "body": "Koi baat nahi! Best of luck. 🙂"})
+    
+    if any(w in msg_lower for w in accept_words):
+        return jsonify({"action": "send", "body": "Bilkul! Main abhi draft karte hoon — 2 minute mein bhejti hoon. ✓"})
+
+    # Generate contextual reply
+    try:
+        reply_trigger = dict(trigger)
+        reply_trigger.setdefault("payload", {})["merchant_reply"] = message
+        reply_trigger["kind"] = "active_planning_intent"
+        result = bot.compose(category, merchant, reply_trigger, None)
+        return jsonify({"action": "send", "body": result["body"]})
+    except Exception as e:
+        return jsonify({"action": "send", "body": "Samajh gayi! Main check karke aapko update karti hoon."})
+
+
+@app.route("/demo", methods=["GET"])
+def demo():
+    return """<!DOCTYPE html>
+<html><head><title>Vera Bot — API Demo</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;background:#f5f5f5;color:#1a1a1a}.nav{background:#0f4539;color:white;padding:14px 24px;display:flex;align-items:center;gap:16px}.nav a{color:#7effd4;font-size:13px;text-decoration:none}.nav h1{font-size:16px;font-weight:600;flex:1}.container{max-width:900px;margin:32px auto;padding:0 20px}.card{background:white;border-radius:10px;border:1px solid #e5e7eb;margin-bottom:20px;overflow:hidden}.card-header{padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer;border-bottom:1px solid #f3f4f6}.method{font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px}.get{background:#dcfce7;color:#15803d}.post{background:#dbeafe;color:#1d4ed8}.path{font-weight:600;font-size:14px}.desc{font-size:13px;color:#6b7280;margin-left:auto}.card-body{padding:16px 20px;display:none}.card-body.open{display:block}textarea{width:100%;font-family:monospace;font-size:12px;border:1px solid #e5e7eb;border-radius:6px;padding:10px;resize:vertical;background:#f9fafb}button{background:#0f4539;color:white;border:none;padding:9px 20px;border-radius:6px;cursor:pointer;font-size:13px;margin-top:10px}.response{margin-top:14px;background:#1e1e1e;color:#d4d4d4;border-radius:6px;padding:14px;font-family:monospace;font-size:12px;white-space:pre-wrap;max-height:300px;overflow-y:auto;display:none}.response.show{display:block}.status-ok{color:#4ade80;font-weight:bold}.status-err{color:#f87171;font-weight:bold}</style>
+</head><body>
+<div class="nav"><h1>🌿 Vera Bot — API Demo</h1><a href="/">Home</a><a href="/v1/healthz">Health</a><a href="/chat">Chat</a></div>
+<div class="container">
+<div class="card"><div class="card-header" onclick="toggle('h')"><span class="method get">GET</span><span class="path">/v1/healthz</span><span class="desc">Liveness check</span></div><div class="card-body" id="h"><button onclick="callGet('/v1/healthz','rh')">Send</button><div class="response" id="rh"></div></div></div>
+<div class="card"><div class="card-header" onclick="toggle('m')"><span class="method get">GET</span><span class="path">/v1/metadata</span><span class="desc">Team info</span></div><div class="card-body" id="m"><button onclick="callGet('/v1/metadata','rm')">Send</button><div class="response" id="rm"></div></div></div>
+<div class="card"><div class="card-header" onclick="toggle('c')"><span class="method post">POST</span><span class="path">/v1/context</span><span class="desc">Push context</span></div><div class="card-body" id="c"><textarea id="bc" rows="6">{"scope":"merchant","context_id":"m_001","version":1,"payload":{"merchant_id":"m_001","category_slug":"dentists","identity":{"name":"Dr. Meera","owner_first_name":"Meera","city":"Delhi","locality":"Lajpat Nagar","languages":["en","hi"],"verified":true},"performance":{"views":2410,"calls":18,"ctr":0.021,"leads":9,"delta_7d":{"views_pct":0.18,"calls_pct":-0.05,"ctr_pct":0.02}},"offers":[{"title":"Dental Cleaning @ Rs.299","status":"active"}],"signals":["ctr_below_peer_median"],"subscription":{"status":"active","plan":"Pro","days_remaining":82},"customer_aggregate":{"total_unique_ytd":540,"lapsed_180d_plus":78,"retention_6mo_pct":0.38,"high_risk_adult_count":124},"review_themes":[],"conversation_history":[]},"delivered_at":"2026-05-01T10:00:00Z"}</textarea><button onclick="callPost('/v1/context','bc','rc')">Send</button><div class="response" id="rc"></div></div></div>
+<div class="card"><div class="card-header" onclick="toggle('t')"><span class="method post">POST</span><span class="path">/v1/tick</span><span class="desc">Generate message</span></div><div class="card-body" id="t"><textarea id="bt" rows="3">{"now":"2026-05-01T10:30:00Z","available_triggers":["trg_001"]}</textarea><button onclick="callPost('/v1/tick','bt','rt')">Send</button><div class="response" id="rt"></div></div></div>
+<div class="card"><div class="card-header" onclick="toggle('r')"><span class="method post">POST</span><span class="path">/v1/reply</span><span class="desc">Handle reply</span></div><div class="card-body" id="r"><textarea id="br" rows="5">{"conversation_id":"conv_001","merchant_id":"m_001","customer_id":null,"from_role":"merchant","message":"Yes please send details","received_at":"2026-05-01T10:45:00Z","turn_number":2}</textarea><button onclick="callPost('/v1/reply','br','rr')">Send</button><div class="response" id="rr"></div></div></div>
+</div>
+<script>
+function toggle(id){document.getElementById(id).classList.toggle('open')}
+async function callGet(path,rid){const r=document.getElementById(rid);r.className='response show';r.textContent='Loading...';try{const res=await fetch(path);const d=await res.json();r.innerHTML='<span class="status-ok">HTTP '+res.status+'</span>\n\n'+JSON.stringify(d,null,2)}catch(e){r.innerHTML='<span class="status-err">'+e.message+'</span>'}}
+async function callPost(path,bid,rid){const r=document.getElementById(rid);r.className='response show';r.textContent='Loading...';try{const res=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:document.getElementById(bid).value});const d=await res.json();const c=res.ok?'status-ok':'status-err';r.innerHTML='<span class="'+c+'">HTTP '+res.status+'</span>\n\n'+JSON.stringify(d,null,2)}catch(e){r.innerHTML='<span class="status-err">'+e.message+'</span>'}}
+toggle('h');
+</script></body></html>"""
+
 
 # ---------------------------------------------------------------------------
 # POST /v1/context
