@@ -756,7 +756,7 @@ def metadata():
             "the fact block. Auto-reply detection, intent handoff, and graceful exit are "
             "handled as deterministic routing rules, not LLM guesses."
         ),
-        "contact_email": "disha@example.com",
+        "contact_email": "disha.sikka77@gmail.com",
         "version": "1.0.0",
         "submitted_at": datetime.now(timezone.utc).isoformat(),
     })
