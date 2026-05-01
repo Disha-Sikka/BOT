@@ -74,6 +74,10 @@ def root():
             <h3><span class="method get" style="background:#ede9fe;color:#7c3aed;">GET</span> /v1/test</h3>
             <p>🧪 See a live generated message in your browser</p>
         </a>
+        <a class="card" href="/demo" style="border-color:#0f4539;background:#f0fdf4;">
+            <h3><span class="method get" style="background:#dcfce7;color:#15803d;">GET</span> /demo</h3>
+            <p>🔬 Interactive API explorer — test all endpoints in browser</p>
+        </a>
     </div>
 
     <div class="info">
