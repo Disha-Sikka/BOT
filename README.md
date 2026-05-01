@@ -1,7 +1,7 @@
 # Vera Bot — magicpin AI Challenge Submission
 
 **Team**: Solo  
-**Model**: `claude-sonnet-4-20250514` at `temperature=0`  
+**Model**: `mistral-small-latest` at `temperature=0`  
 **Approach**: 3-layer Decision Engine + Context Builder + LLM Composer
 
 ---
@@ -20,7 +20,7 @@
                     └──────────────┬──────────────┘
                                    │
                     ┌──────────────▼──────────────┐
-                    │  Layer 3: Claude (temp=0)    │ → final WhatsApp body
+                    │  Layer 3: Mistral (temp=0)   │ → final WhatsApp body
                     │  constrained to fact block   │
                     └─────────────────────────────┘
 ```
@@ -111,7 +111,7 @@ The context builder explicitly lists what facts ARE available and instructs the 
 | `GET /v1/metadata` | Team + approach metadata |
 
 Run: `python server.py [port]` (default 8080)  
-Requires: `ANTHROPIC_API_KEY` env var, `pip install flask`
+Requires: `MISTRAL_API_KEY` env var, `pip install flask`
 
 ---
 
