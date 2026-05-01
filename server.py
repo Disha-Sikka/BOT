@@ -19,10 +19,65 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger("vera-bot")
 
 app = Flask(__name__)
+START_TIME = time.time()
+
+
 @app.route("/", methods=["GET"])
 def root():
-    return jsonify({"message": "Vera Bot is live", "health": "/v1/healthz", "metadata": "/v1/metadata"})
-START_TIME = time.time()
+    return """<!DOCTYPE html>
+<html>
+<head>
+    <title>Vera Bot — magicpin AI Challenge</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 700px; margin: 60px auto; padding: 0 20px; background: #f9f9f9; }
+        h1 { color: #1a1a1a; font-size: 28px; }
+        .badge { background: #22c55e; color: white; padding: 4px 12px; border-radius: 20px; font-size: 13px; margin-left: 10px; }
+        p { color: #555; line-height: 1.6; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 32px; }
+        .card { background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; text-decoration: none; color: inherit; display: block; }
+        .card:hover { border-color: #6366f1; box-shadow: 0 2px 8px rgba(99,102,241,0.1); }
+        .card h3 { margin: 0 0 6px; font-size: 15px; color: #1a1a1a; }
+        .card .method { font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 4px; margin-right: 6px; }
+        .get { background: #dcfce7; color: #16a34a; }
+        .post { background: #dbeafe; color: #1d4ed8; }
+        .card p { font-size: 13px; color: #6b7280; margin: 6px 0 0; }
+        .info { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-top: 24px; font-size: 14px; }
+        .info strong { color: #15803d; }
+    </style>
+</head>
+<body>
+    <h1>Vera Bot <span class="badge">● Live</span></h1>
+    <p>magicpin AI Challenge submission — AI assistant that composes grounded WhatsApp messages for merchants using a 3-layer decision engine + Mistral AI.</p>
+
+    <div class="grid">
+        <a class="card" href="/v1/healthz">
+            <h3><span class="method get">GET</span> /v1/healthz</h3>
+            <p>Liveness check — returns status and context counts</p>
+        </a>
+        <a class="card" href="/v1/metadata">
+            <h3><span class="method get">GET</span> /v1/metadata</h3>
+            <p>Team info, model, approach description</p>
+        </a>
+        <div class="card">
+            <h3><span class="method post">POST</span> /v1/context</h3>
+            <p>Push category / merchant / customer / trigger context</p>
+        </div>
+        <div class="card">
+            <h3><span class="method post">POST</span> /v1/tick</h3>
+            <p>Wake-up call — bot decides what messages to send</p>
+        </div>
+        <div class="card">
+            <h3><span class="method post">POST</span> /v1/reply</h3>
+            <p>Handle merchant reply — send / wait / end</p>
+        </div>
+    </div>
+
+    <div class="info">
+        <strong>Architecture:</strong> Decision Engine (pure Python) → Context Builder → Mistral AI (temp=0)<br>
+        <strong>Model:</strong> mistral-small-latest &nbsp;|&nbsp; <strong>Team:</strong> Disha Sikka
+    </div>
+</body>
+</html>"""
 
 # ---------------------------------------------------------------------------
 # IN-MEMORY STATE
@@ -365,17 +420,17 @@ def healthz():
 def metadata():
     return jsonify({
         "team_name": "Vera Decision Engine",
-        "team_members": ["Disha Sikka"],
-        "model": "mistral-small-latest",
+        "team_members": ["Manorama"],
+        "model": "claude-sonnet-4-20250514",
         "approach": (
             "3-layer architecture: (1) pure-logic decision engine selects intent, CTA shape, "
             "and compulsion levers per trigger kind; (2) context builder assembles grounded "
             "fact block — only verified numbers from the 4 contexts, no hallucination; "
-            "(3) Mistral at temperature=0 composes the final message constrained strictly to "
+            "(3) Claude at temperature=0 composes the final message constrained strictly to "
             "the fact block. Auto-reply detection, intent handoff, and graceful exit are "
             "handled as deterministic routing rules, not LLM guesses."
         ),
-        "contact_email": "disha.sikka77@gmail.com",
+        "contact_email": "participant@example.com",
         "version": "1.0.0",
         "submitted_at": datetime.now(timezone.utc).isoformat(),
     })
