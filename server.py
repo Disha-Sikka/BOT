@@ -435,29 +435,47 @@ async function startConversation() {
     const m = MERCHANTS[currentMerchant];
     await pushContext('category', m.category.slug, m.category);
     await pushContext('merchant', m.merchant.merchant_id, m.merchant);
-    await pushContext('trigger', m.trigger.id, m.trigger);
+    const uniqueTrigId = m.trigger.id + '_' + Date.now();
+    const trigPayload = {...m.trigger, id: uniqueTrigId, suppression_key: m.trigger.suppression_key + '_' + Date.now()};
+    await pushContext('trigger', uniqueTrigId, trigPayload);
+    m._lastTrigId = uniqueTrigId;
 
-    addSystem('Context loaded — Vera is thinking...');
+    addSystem('Context loaded — Vera is generating message via Mistral AI (may take 10-20s)...');
     showTyping();
 
-    const tickRes = await fetch('/v1/tick', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({now: new Date().toISOString(), available_triggers: [m.trigger.id]})
-    });
-    const tickData = await tickRes.json();
-    hideTyping();
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 35000);
 
-    if (tickData.actions && tickData.actions.length > 0) {
-        const action = tickData.actions[0];
-        convId = action.conversation_id;
-        const isBinary = action.cta === 'binary_yes_stop';
+        const tickRes = await fetch('/v1/tick', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({now: new Date().toISOString(), available_triggers: [m._lastTrigId]}),
+            signal: controller.signal
+        });
+        clearTimeout(timeout);
+        const tickData = await tickRes.json();
+        hideTyping();
+
+        if (tickData.actions && tickData.actions.length > 0) {
+            const action = tickData.actions[0];
+            convId = action.conversation_id;
+            const isBinary = action.cta === 'binary_yes_stop';
+            document.getElementById('messages').innerHTML = '';
+            addMsg(action.body, 'vera', isBinary);
+            initialized = true;
+        } else {
+            document.getElementById('messages').innerHTML = '';
+            addSystem('Vera is thinking... click "Start fresh chat" to try again.');
+        }
+    } catch(e) {
+        hideTyping();
         document.getElementById('messages').innerHTML = '';
-        addMsg(action.body, 'vera', isBinary);
-        initialized = true;
-    } else {
-        document.getElementById('messages').innerHTML = '';
-        addSystem('No message generated — try a different merchant or refresh.');
+        if (e.name === 'AbortError') {
+            addSystem('Vera is taking too long (Mistral API slow). Click "Start fresh chat" to retry.');
+        } else {
+            addSystem('Error: ' + e.message + ' — Click "Start fresh chat" to retry.');
+        }
     }
 }
 
@@ -472,6 +490,8 @@ async function sendMsg() {
     showTyping();
 
     try {
+        const ctrl2 = new AbortController();
+        const t2 = setTimeout(() => ctrl2.abort(), 35000);
         const res = await fetch('/v1/reply', {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
@@ -483,8 +503,10 @@ async function sendMsg() {
                 message: text,
                 received_at: new Date().toISOString(),
                 turn_number: turnNumber
-            })
+            }),
+            signal: ctrl2.signal
         });
+        clearTimeout(t2);
         const data = await res.json();
         hideTyping();
 
@@ -499,7 +521,11 @@ async function sendMsg() {
         }
     } catch(e) {
         hideTyping();
-        addSystem('Error: ' + e.message);
+        if (e.name === 'AbortError') {
+            addSystem('Reply timed out — Mistral API slow. Try again.');
+        } else {
+            addSystem('Error: ' + e.message);
+        }
     }
 }
 
