@@ -78,6 +78,10 @@ def root():
             <h3><span class="method get" style="background:#dcfce7;color:#15803d;">GET</span> /demo</h3>
             <p>🔬 Interactive API explorer — test all endpoints in browser</p>
         </a>
+        <a class="card" href="/chat" style="border-color:#25d366;background:#f0fff4;">
+            <h3><span class="method get" style="background:#dcfce7;color:#15803d;">GET</span> /chat</h3>
+            <p>💬 Talk to Vera like a real merchant — WhatsApp style</p>
+        </a>
     </div>
 
     <div class="info">
@@ -250,6 +254,269 @@ def test_compose():
 </body>
 </html>"""
 
+
+
+
+# ---------------------------------------------------------------------------
+# GET /chat — WhatsApp-style chat interface to talk to Vera
+# ---------------------------------------------------------------------------
+
+@app.route("/chat", methods=["GET"])
+def chat_page():
+    return """<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat with Vera</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: #e5ddd5; height: 100vh; display: flex; flex-direction: column; }
+
+        .topbar { background: #075e54; color: white; padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
+        .avatar { width: 40px; height: 40px; border-radius: 50%; background: #25d366; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; }
+        .topbar-info h2 { font-size: 15px; font-weight: 600; }
+        .topbar-info p { font-size: 12px; opacity: 0.8; }
+        .status-dot { width: 8px; height: 8px; background: #25d366; border-radius: 50%; display: inline-block; margin-right: 4px; }
+
+        .merchant-bar { background: #f0f0f0; padding: 8px 16px; font-size: 12px; color: #555; border-bottom: 1px solid #ddd; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+        .merchant-bar select, .merchant-bar button { font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid #ccc; background: white; cursor: pointer; }
+        .merchant-bar button { background: #075e54; color: white; border: none; }
+
+        .messages { flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+
+        .msg { max-width: 75%; padding: 8px 12px; border-radius: 10px; font-size: 14px; line-height: 1.5; position: relative; }
+        .msg .time { font-size: 10px; opacity: 0.6; margin-top: 4px; text-align: right; }
+        .msg.vera { background: white; align-self: flex-start; border-top-left-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .msg.merchant { background: #dcf8c6; align-self: flex-end; border-top-right-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .msg.system { background: rgba(0,0,0,0.08); align-self: center; font-size: 11px; color: #555; border-radius: 8px; padding: 4px 12px; max-width: 90%; text-align: center; }
+        .sender { font-size: 11px; font-weight: bold; color: #075e54; margin-bottom: 2px; }
+        .typing { background: white; align-self: flex-start; border-radius: 10px; padding: 10px 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .typing span { display: inline-block; width: 8px; height: 8px; background: #aaa; border-radius: 50%; margin: 0 2px; animation: bounce 1.2s infinite; }
+        .typing span:nth-child(2) { animation-delay: 0.2s; }
+        .typing span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+
+        .input-bar { background: #f0f0f0; padding: 10px 12px; display: flex; gap: 8px; align-items: center; }
+        .input-bar input { flex: 1; padding: 10px 14px; border-radius: 20px; border: none; font-size: 14px; outline: none; }
+        .input-bar button { width: 42px; height: 42px; border-radius: 50%; background: #075e54; color: white; border: none; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
+        .input-bar button:hover { background: #064c44; }
+
+        .cta-buttons { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+        .cta-btn { background: #075e54; color: white; border: none; padding: 6px 14px; border-radius: 16px; font-size: 13px; cursor: pointer; }
+        .cta-btn.stop { background: #e74c3c; }
+        .cta-btn:hover { opacity: 0.85; }
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    <div class="avatar">V</div>
+    <div class="topbar-info">
+        <h2>Vera <span style="font-size:11px;opacity:0.7">by magicpin</span></h2>
+        <p><span class="status-dot"></span>online</p>
+    </div>
+</div>
+
+<div class="merchant-bar">
+    <span>You are:</span>
+    <select id="merchant-select" onchange="changeMerchant()">
+        <option value="dentist">Dr. Meera — Dental Clinic, Delhi</option>
+        <option value="salon">Lakshmi — Studio11 Salon, Hyderabad</option>
+        <option value="restaurant">Suresh — SK Pizza Junction, Delhi</option>
+        <option value="gym">Kiran — PowerHouse Fitness, Bangalore</option>
+    </select>
+    <button onclick="startConversation()">Start fresh chat</button>
+</div>
+
+<div class="messages" id="messages">
+    <div class="msg system">Loading Vera...</div>
+</div>
+
+<div class="input-bar">
+    <input type="text" id="msg-input" placeholder="Type a message..." onkeydown="if(event.key==='Enter') sendMsg()">
+    <button onclick="sendMsg()">➤</button>
+</div>
+
+<script>
+const MERCHANTS = {
+    dentist: {
+        merchant: {merchant_id:"m_demo_dentist",category_slug:"dentists",identity:{name:"Dr. Meera Dental Clinic",owner_first_name:"Meera",city:"Delhi",locality:"Lajpat Nagar",languages:["en","hi"],verified:true},performance:{views:2410,calls:18,ctr:0.021,leads:9,delta_7d:{views_pct:0.18,calls_pct:-0.05,ctr_pct:0.02}},offers:[{title:"Dental Cleaning @ ₹299",status:"active"}],signals:["ctr_below_peer_median","stale_posts:22d","high_risk_adult_cohort"],subscription:{status:"active",plan:"Pro",days_remaining:82},customer_aggregate:{total_unique_ytd:540,lapsed_180d_plus:78,retention_6mo_pct:0.38,high_risk_adult_count:124},review_themes:[],conversation_history:[]},
+        category: {slug:"dentists",voice:{tone:"peer_clinical",salutation:"Dr. {first_name}",vocab_no:["guaranteed"]},offer_catalog:[{title:"Dental Cleaning @ ₹299"},{title:"Teeth Whitening @ ₹1,499"}],peer_stats:{avg_ctr:0.03,avg_rating:4.4,avg_review_count:62,avg_views_30d:1820},digest:[{id:"d_jida",source:"JIDA Oct 2026 p.14",title:"3-month fluoride recall cuts caries 38% vs 6-month",trial_n:2100,patient_segment:"high_risk_adults",summary:"38% lower caries recurrence with 3-month recall in high-risk adults."}],seasonal_beats:[],trend_signals:[]},
+        trigger: {id:"trg_demo_dentist",scope:"merchant",kind:"research_digest",source:"external",merchant_id:"m_demo_dentist",customer_id:null,payload:{category:"dentists",top_item_id:"d_jida"},urgency:2,suppression_key:"demo:dentist:research",expires_at:"2026-12-01T00:00:00Z"},
+        name: "Dr. Meera"
+    },
+    salon: {
+        merchant: {merchant_id:"m_demo_salon",category_slug:"salons",identity:{name:"Studio11 Family Salon",owner_first_name:"Lakshmi",city:"Hyderabad",locality:"Kapra",languages:["en","hi","te"],verified:true},performance:{views:5430,calls:61,ctr:0.041,leads:38,delta_7d:{views_pct:0.12,calls_pct:0.2,ctr_pct:0.03}},offers:[{title:"Bridal Package @ ₹24,999",status:"active"},{title:"Keratin Treatment @ ₹3,499",status:"active"}],signals:["strong_performer","bridal_peak_incoming"],subscription:{status:"active",plan:"Pro",days_remaining:142},customer_aggregate:{total_unique_ytd:1240,lapsed_180d_plus:180,retention_6mo_pct:0.62},review_themes:[],conversation_history:[]},
+        category: {slug:"salons",voice:{tone:"warm_practical",salutation:"{first_name}",vocab_no:["guaranteed results"]},offer_catalog:[{title:"Bridal Package @ ₹24,999"},{title:"Keratin Treatment @ ₹3,499"},{title:"Haircut @ ₹299"}],peer_stats:{avg_ctr:0.038,avg_rating:4.2,avg_review_count:85,avg_views_30d:3200},digest:[{id:"d_diwali",source:"magicpin salon data 2025",title:"Diwali: 3x weekend footfall, advance booking critical",trial_n:null,patient_segment:null,summary:"Pre-Diwali bridal and party bookings surge. Walk-in overflow causes wait complaints."}],seasonal_beats:[{month_range:"Oct-Nov",note:"Diwali bridal peak"}],trend_signals:[]},
+        trigger: {id:"trg_demo_salon",scope:"merchant",kind:"festival_upcoming",source:"external",merchant_id:"m_demo_salon",customer_id:null,payload:{festival:"Diwali",days_until:5},urgency:3,suppression_key:"demo:salon:diwali",expires_at:"2026-12-01T00:00:00Z"},
+        name: "Lakshmi"
+    },
+    restaurant: {
+        merchant: {merchant_id:"m_demo_restaurant",category_slug:"restaurants",identity:{name:"SK Pizza Junction",owner_first_name:"Suresh",city:"Delhi",locality:"Sant Nagar",languages:["en","hi"],verified:true},performance:{views:3100,calls:22,ctr:0.033,leads:18,delta_7d:{views_pct:0.05,calls_pct:-0.1,ctr_pct:0.01}},offers:[{title:"BOGO Pizza Tue-Thu",status:"active"}],signals:["trial_expiring_soon","delivery_preference"],subscription:{status:"trial",plan:"Trial",days_remaining:8},customer_aggregate:{total_unique_ytd:920,lapsed_180d_plus:310,retention_6mo_pct:0.44},review_themes:[{theme:"delivery_time",sentiment:"neg",occurrences_30d:5,common_quote:"delivery took 45 min"}],conversation_history:[]},
+        category: {slug:"restaurants",voice:{tone:"friendly_operator",salutation:"{first_name}",vocab_no:[]},offer_catalog:[{title:"BOGO Pizza Tue-Thu"},{title:"Family Combo @ ₹699"}],peer_stats:{avg_ctr:0.036,avg_rating:4.1,avg_review_count:120,avg_views_30d:3800},digest:[{id:"d_ipl",source:"magicpin restaurant data 2025",title:"Saturday IPL home matches shift -12% restaurant covers",trial_n:null,patient_segment:null,summary:"When IPL home matches fall on Saturday, dine-in covers drop 12%. Push delivery instead."}],seasonal_beats:[],trend_signals:[]},
+        trigger: {id:"trg_demo_restaurant",scope:"merchant",kind:"review_theme_emerged",source:"internal",merchant_id:"m_demo_restaurant",customer_id:null,payload:{theme:"delivery_time",occurrences_30d:5,common_quote:"delivery took 45 min"},urgency:3,suppression_key:"demo:restaurant:reviews",expires_at:"2026-12-01T00:00:00Z"},
+        name: "Suresh"
+    },
+    gym: {
+        merchant: {merchant_id:"m_demo_gym",category_slug:"gyms",identity:{name:"PowerHouse Fitness",owner_first_name:"Kiran",city:"Bangalore",locality:"Indiranagar",languages:["en","hi"],verified:true},performance:{views:2800,calls:19,ctr:0.029,leads:14,delta_7d:{views_pct:-0.18,calls_pct:-0.25,ctr_pct:-0.08}},offers:[{title:"3-Month Membership @ ₹4,999",status:"active"},{title:"Personal Training Trial @ ₹999",status:"active"}],signals:["seasonal_dip_expected","perf_dip_moderate"],subscription:{status:"active",plan:"Pro",days_remaining:88},customer_aggregate:{total_unique_ytd:480,lapsed_180d_plus:165,retention_6mo_pct:0.42},review_themes:[],conversation_history:[]},
+        category: {slug:"gyms",voice:{tone:"energetic_peer",salutation:"{first_name}",vocab_no:["guaranteed weight loss"]},offer_catalog:[{title:"3-Month Membership @ ₹4,999"},{title:"Student Morning Batch @ ₹2,499"}],peer_stats:{avg_ctr:0.032,avg_rating:4.3,avg_review_count:48,avg_views_30d:2200},digest:[{id:"d_exam",source:"magicpin gym data 2026",title:"Exam season causes 18-22% enrollment dip April-May",trial_n:null,patient_segment:"student_18_24",summary:"Gyms running student morning batch offers offset 60-70% of seasonal dip."}],seasonal_beats:[{month_range:"Apr-May",note:"exam season dip"}],trend_signals:[]},
+        trigger: {id:"trg_demo_gym",scope:"merchant",kind:"seasonal_perf_dip",source:"internal",merchant_id:"m_demo_gym",customer_id:null,payload:{metric:"views",delta_pct:-0.30,season_note:"exam_season"},urgency:2,suppression_key:"demo:gym:seasonal",expires_at:"2026-12-01T00:00:00Z"},
+        name: "Kiran"
+    }
+};
+
+let currentMerchant = "dentist";
+let convId = null;
+let turnNumber = 1;
+let initialized = false;
+
+function now() {
+    return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+
+function addMsg(text, role, showCTA) {
+    const msgs = document.getElementById('messages');
+    const div = document.createElement('div');
+    div.className = 'msg ' + role;
+    if (role === 'vera') {
+        div.innerHTML = '<div class="sender">Vera</div>' + text.replace(/\n/g,'<br>');
+        if (showCTA) {
+            div.innerHTML += '<div class="cta-buttons"><button class="cta-btn" onclick="sendQuick(\'YES\')">YES</button><button class="cta-btn stop" onclick="sendQuick(\'STOP\')">STOP</button><button class="cta-btn" onclick="sendQuick(\'Tell me more\')">Tell me more</button></div>';
+        }
+    } else if (role === 'merchant') {
+        div.innerHTML = text;
+    } else {
+        div.innerHTML = text;
+    }
+    div.innerHTML += '<div class="time">' + now() + (role==='merchant'?' ✓✓':'') + '</div>';
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addSystem(text) {
+    const msgs = document.getElementById('messages');
+    const div = document.createElement('div');
+    div.className = 'msg system';
+    div.textContent = text;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+}
+
+function showTyping() {
+    const msgs = document.getElementById('messages');
+    const div = document.createElement('div');
+    div.className = 'typing';
+    div.id = 'typing-indicator';
+    div.innerHTML = '<span></span><span></span><span></span>';
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+}
+
+function hideTyping() {
+    const el = document.getElementById('typing-indicator');
+    if (el) el.remove();
+}
+
+async function pushContext(scope, id, payload) {
+    await fetch('/v1/context', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({scope, context_id: id, version: Math.floor(Date.now()/1000), payload, delivered_at: new Date().toISOString()})
+    });
+}
+
+async function startConversation() {
+    convId = null;
+    turnNumber = 1;
+    initialized = false;
+    document.getElementById('messages').innerHTML = '';
+    addSystem('Starting conversation...');
+
+    const m = MERCHANTS[currentMerchant];
+    await pushContext('category', m.category.slug, m.category);
+    await pushContext('merchant', m.merchant.merchant_id, m.merchant);
+    await pushContext('trigger', m.trigger.id, m.trigger);
+
+    addSystem('Context loaded — Vera is thinking...');
+    showTyping();
+
+    const tickRes = await fetch('/v1/tick', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({now: new Date().toISOString(), available_triggers: [m.trigger.id]})
+    });
+    const tickData = await tickRes.json();
+    hideTyping();
+
+    if (tickData.actions && tickData.actions.length > 0) {
+        const action = tickData.actions[0];
+        convId = action.conversation_id;
+        const isBinary = action.cta === 'binary_yes_stop';
+        document.getElementById('messages').innerHTML = '';
+        addMsg(action.body, 'vera', isBinary);
+        initialized = true;
+    } else {
+        document.getElementById('messages').innerHTML = '';
+        addSystem('No message generated — try a different merchant or refresh.');
+    }
+}
+
+async function sendMsg() {
+    const input = document.getElementById('msg-input');
+    const text = input.value.trim();
+    if (!text || !initialized) return;
+    input.value = '';
+
+    addMsg(text, 'merchant');
+    turnNumber++;
+    showTyping();
+
+    try {
+        const res = await fetch('/v1/reply', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+                conversation_id: convId || 'conv_demo',
+                merchant_id: MERCHANTS[currentMerchant].merchant.merchant_id,
+                customer_id: null,
+                from_role: 'merchant',
+                message: text,
+                received_at: new Date().toISOString(),
+                turn_number: turnNumber
+            })
+        });
+        const data = await res.json();
+        hideTyping();
+
+        if (data.action === 'send') {
+            addMsg(data.body, 'vera', false);
+        } else if (data.action === 'end') {
+            addMsg('Theek hai! Best of luck. Feel free to reach out anytime. 🙂', 'vera', false);
+            addSystem('Conversation ended');
+            initialized = false;
+        } else if (data.action === 'wait') {
+            addSystem('Vera is giving you space — she will follow up later.');
+        }
+    } catch(e) {
+        hideTyping();
+        addSystem('Error: ' + e.message);
+    }
+}
+
+function sendQuick(text) {
+    document.getElementById('msg-input').value = text;
+    sendMsg();
+}
+
+function changeMerchant() {
+    currentMerchant = document.getElementById('merchant-select').value;
+}
+
+// Auto-start on load
+window.onload = () => startConversation();
+</script>
+</body>
+</html>"""
 
 # ---------------------------------------------------------------------------
 # POST /v1/context
