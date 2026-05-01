@@ -309,7 +309,7 @@ var SALON_DATA={merchant:{merchant_id:"m_demo_salon",category_slug:"salons",iden
 var REST_DATA={merchant:{merchant_id:"m_demo_rest",category_slug:"restaurants",identity:{name:"SK Pizza Junction",owner_first_name:"Suresh",city:"Delhi",locality:"Sant Nagar",languages:["en","hi"],verified:true},performance:{views:3100,calls:22,ctr:0.033,leads:18,delta_7d:{views_pct:0.05,calls_pct:-0.1,ctr_pct:0.01}},offers:[{title:"BOGO Pizza Tue-Thu",status:"active"}],signals:["delivery_preference"],subscription:{status:"trial",plan:"Trial",days_remaining:8},customer_aggregate:{total_unique_ytd:920,lapsed_180d_plus:310,retention_6mo_pct:0.44},review_themes:[{theme:"delivery_time",sentiment:"neg",occurrences_30d:5,common_quote:"delivery took 45 min"}],conversation_history:[]},category:{slug:"restaurants",voice:{tone:"friendly_operator",salutation:"{first_name}",vocab_no:[]},offer_catalog:[{title:"BOGO Pizza Tue-Thu"},{title:"Family Combo @ Rs.699"}],peer_stats:{avg_ctr:0.036,avg_rating:4.1,avg_review_count:120,avg_views_30d:3800},digest:[{id:"d_ipl",source:"magicpin data 2025",title:"Saturday IPL matches shift -12% restaurant covers",trial_n:null,patient_segment:null,summary:"Push delivery on IPL Saturdays."}],seasonal_beats:[],trend_signals:[]},trigger:{id:"trg_rest",scope:"merchant",kind:"review_theme_emerged",source:"internal",merchant_id:"m_demo_rest",customer_id:null,payload:{theme:"delivery_time",occurrences_30d:5},urgency:3,suppression_key:"demo:rest",expires_at:"2026-12-01T00:00:00Z"}};
 var GYM_DATA={merchant:{merchant_id:"m_demo_gym",category_slug:"gyms",identity:{name:"PowerHouse Fitness",owner_first_name:"Kiran",city:"Bangalore",locality:"Indiranagar",languages:["en","hi"],verified:true},performance:{views:2800,calls:19,ctr:0.029,leads:14,delta_7d:{views_pct:-0.18,calls_pct:-0.25,ctr_pct:-0.08}},offers:[{title:"3-Month Membership @ Rs.4999",status:"active"}],signals:["seasonal_dip_expected"],subscription:{status:"active",plan:"Pro",days_remaining:88},customer_aggregate:{total_unique_ytd:480,lapsed_180d_plus:165,retention_6mo_pct:0.42},review_themes:[],conversation_history:[]},category:{slug:"gyms",voice:{tone:"energetic_peer",salutation:"{first_name}",vocab_no:["guaranteed weight loss"]},offer_catalog:[{title:"3-Month Membership @ Rs.4999"},{title:"Student Morning Batch @ Rs.2499"}],peer_stats:{avg_ctr:0.032,avg_rating:4.3,avg_review_count:48,avg_views_30d:2200},digest:[{id:"d_exam",source:"magicpin gym data 2026",title:"Exam season causes 18-22% enrollment dip April-May",trial_n:null,patient_segment:"student_18_24",summary:"Student batch offers offset 60-70% of seasonal dip."}],seasonal_beats:[],trend_signals:[]},trigger:{id:"trg_gym",scope:"merchant",kind:"seasonal_perf_dip",source:"internal",merchant_id:"m_demo_gym",customer_id:null,payload:{metric:"views",delta_pct:-0.30},urgency:2,suppression_key:"demo:gym",expires_at:"2026-12-01T00:00:00Z"}};
 var MERCHANTS={dentist:DENTIST_DATA,salon:SALON_DATA,restaurant:REST_DATA,gym:GYM_DATA};
-var currentMerchant="dentist",convId=null,turnNum=1,ready=false;
+var currentMerchant="dentist",convId=null,turnNum=1,ready=false,chatHistory=[];
 function nowTime(){return new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});}
 function addMsg(text,role,showCTA){
   var msgs=document.getElementById("msgs");
@@ -331,7 +331,7 @@ function addSys(text){var msgs=document.getElementById("msgs");var div=document.
 function showTyping(){var msgs=document.getElementById("msgs");var div=document.createElement("div");div.className="typing";div.id="typ";div.innerHTML="<span></span><span></span><span></span>";msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;}
 function hideTyping(){var el=document.getElementById("typ");if(el)el.remove();}
 async function startConversation(){
-  ready=false;convId=null;turnNum=1;
+  ready=false;convId=null;turnNum=1;chatHistory=[];
   document.getElementById("msgs").innerHTML="";
   addSys("Connecting to Vera (10-20 seconds)...");
   showTyping();
@@ -342,19 +342,19 @@ async function startConversation(){
     hideTyping();
     document.getElementById("msgs").innerHTML="";
     if(data.error){addSys("Error: "+data.error+". Click Start fresh chat.");}
-    else{convId="conv_"+Date.now();addMsg(data.body,"vera",data.cta==="binary_yes_stop");ready=true;}
+    else{convId="conv_"+Date.now();addMsg(data.body,"vera",data.cta==="binary_yes_stop");chatHistory.push({role:"vera",content:data.body});ready=true;}
   }catch(e){hideTyping();document.getElementById("msgs").innerHTML="";addSys("Failed: "+e.message+". Click Start fresh chat.");}
 }
 async function sendMsg(){
   var inp=document.getElementById("inp");var text=inp.value.trim();
   if(!text||!ready)return;inp.value="";
-  addMsg(text,"merchant",false);turnNum++;showTyping();
+  addMsg(text,"merchant",false);chatHistory.push({role:"merchant",content:text});turnNum++;showTyping();
   var m=MERCHANTS[currentMerchant];
   try{
-    var res=await fetch("/v1/chat_reply",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({category:m.category,merchant:m.merchant,trigger:m.trigger,message:text})});
+    var res=await fetch("/v1/chat_reply",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({category:m.category,merchant:m.merchant,trigger:m.trigger,message:text,history:chatHistory})});
     var data=await res.json();hideTyping();
-    if(data.action==="end"){addMsg(data.body||"Koi baat nahi! Best of luck.","vera",false);addSys("Conversation ended.");ready=false;}
-    else{addMsg(data.body,"vera",false);}
+    if(data.action==="end"){addMsg(data.body||"Koi baat nahi! Best of luck.","vera",false);addSys("Conversation ended.");ready=false;chatHistory=[];}
+    else{addMsg(data.body,"vera",false);chatHistory.push({role:"vera",content:data.body});}
   }catch(e){hideTyping();addSys("Error: "+e.message);}
 }
 function quick(text){document.getElementById("inp").value=text;sendMsg();}
@@ -393,36 +393,90 @@ def chat_message():
 
 @app.route("/v1/chat_reply", methods=["POST"])
 def chat_reply():
-    """Handle reply in chat UI — calls bot.compose with merchant_reply context."""
+    """Handle reply with full conversation history for context-aware responses."""
     data = request.get_json(force=True)
     category = data.get("category")
     merchant = data.get("merchant")
-    trigger = data.get("trigger")
-    message = data.get("message", "")
-    
+    trigger  = data.get("trigger")
+    message  = data.get("message", "")
+    history  = data.get("history", [])  # list of {role, content} pairs
+
     if not category or not merchant or not trigger:
         return jsonify({"error": "Missing data"}), 400
 
-    # Detect intent
     msg_lower = message.lower().strip()
-    exit_words = ["not interested", "nahi chahiye", "band karo", "stop", "mat bhejo"]
-    accept_words = ["yes", "haan", "bilkul", "ok", "sure", "go ahead", "karo", "bhejo", "theek"]
-    
+
+    # Exit detection
+    exit_words = ["not interested", "nahi chahiye", "band karo", "stop", "mat bhejo",
+                  "don't contact", "hatao", "rehne do"]
     if any(w in msg_lower for w in exit_words):
         return jsonify({"action": "end", "body": "Koi baat nahi! Best of luck. 🙂"})
-    
-    if any(w in msg_lower for w in accept_words):
-        return jsonify({"action": "send", "body": "Bilkul! Main abhi draft karte hoon — 2 minute mein bhejti hoon. ✓"})
 
-    # Generate contextual reply
+    # Build Mistral messages with full history for context
     try:
-        reply_trigger = dict(trigger)
-        reply_trigger.setdefault("payload", {})["merchant_reply"] = message
-        reply_trigger["kind"] = "active_planning_intent"
-        result = bot.compose(category, merchant, reply_trigger, None)
-        return jsonify({"action": "send", "body": result["body"]})
+        api_key = os.environ.get("MISTRAL_API_KEY", "")
+        if not api_key:
+            raise RuntimeError("MISTRAL_API_KEY not set")
+
+        m_id  = merchant.get("identity", {})
+        name  = m_id.get("owner_first_name", m_id.get("name", ""))
+        cat   = merchant.get("category_slug", "")
+        perf  = merchant.get("performance", {})
+        offers = [o["title"] for o in merchant.get("offers", []) if o.get("status") == "active"]
+        signals = merchant.get("signals", [])
+        trigger_kind = trigger.get("kind", "")
+
+        system_prompt = (
+            f"You are Vera, magicpin's WhatsApp AI assistant for merchants. "
+            f"You are currently talking to {name}, who runs a {cat} business. "
+            f"Their key stats: views={perf.get('views')}, CTR={perf.get('ctr')}, "
+            f"calls={perf.get('calls')}, active offers={offers}, signals={signals}. "
+            f"The conversation started because of a '{trigger_kind}' trigger. "
+            f"Rules: Be concise (2-3 sentences max). Use their actual data. "
+            f"Match their language (hi-en mix if they write in Hindi). "
+            f"If they say yes/agree — move to action immediately, don't re-qualify. "
+            f"If they ask general questions (hi, how are you) — briefly acknowledge "
+            f"then redirect to their business context. "
+            f"Never be generic. Always anchor on their specific numbers."
+        )
+
+        # Build message list with history
+        messages = [{"role": "system", "content": system_prompt}]
+
+        # Add conversation history
+        for turn in history[-6:]:  # last 6 turns for context
+            role = "assistant" if turn.get("role") == "vera" else "user"
+            messages.append({"role": role, "content": turn.get("content", "")})
+
+        # Add current message
+        messages.append({"role": "user", "content": message})
+
+        import urllib.request as ur
+        import json as js
+        payload = js.dumps({
+            "model": "mistral-small-latest",
+            "temperature": 0.3,  # slight warmth for conversation
+            "max_tokens": 150,
+            "messages": messages
+        }).encode()
+
+        req = ur.Request(
+            "https://api.mistral.ai/v1/chat/completions",
+            data=payload,
+            headers={"Content-Type": "application/json",
+                     "Authorization": f"Bearer {api_key}"},
+            method="POST"
+        )
+        with ur.urlopen(req, timeout=30) as resp:
+            result = js.loads(resp.read())
+            reply_body = result["choices"][0]["message"]["content"].strip()
+
+        return jsonify({"action": "send", "body": reply_body})
+
     except Exception as e:
-        return jsonify({"action": "send", "body": "Samajh gayi! Main check karke aapko update karti hoon."})
+        logger.error(f"chat_reply failed: {e}")
+        return jsonify({"action": "send",
+                        "body": "Samajh gayi! Ek second — main check karke batati hoon."})
 
 
 @app.route("/demo", methods=["GET"])
