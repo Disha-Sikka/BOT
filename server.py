@@ -131,35 +131,59 @@ def resolve_trigger(trigger_id: str):
 
 @app.route("/v1/test", methods=["GET"])
 def test_compose():
-    """Generates a real message live and shows it in the browser."""
-    import os, json
-    from pathlib import Path
+    """Generates a real message live using hardcoded seed data."""
+    import json
 
-    # Load seed data from dataset folder
-    base = Path(__file__).parent
-    dataset = base / "dataset"
+    # Hardcoded minimal seed — no dataset folder needed on server
+    dentists = {
+        "slug": "dentists",
+        "voice": {"tone": "peer_clinical", "salutation": "Dr. {first_name}", "vocab_no": ["guaranteed", "100% safe"]},
+        "offer_catalog": [{"title": "Dental Cleaning @ ₹299"}, {"title": "Teeth Whitening @ ₹1,499"}],
+        "peer_stats": {"avg_ctr": 0.030, "avg_rating": 4.4, "avg_review_count": 62, "avg_views_30d": 1820},
+        "digest": [{"id": "d_2026W17_jida_fluoride", "source": "JIDA Oct 2026, p.14",
+                    "title": "3-month fluoride recall cuts caries 38% better than 6-month",
+                    "trial_n": 2100, "patient_segment": "high_risk_adults",
+                    "summary": "Multi-center Indian trial: 38% lower caries recurrence with 3-month vs 6-month recall in high-risk adults."}],
+        "seasonal_beats": [{"month_range": "Oct-Dec", "note": "wedding whitening peak"}],
+        "trend_signals": [{"query": "clear aligners delhi", "delta_yoy": 0.62}],
+    }
+    merchant = {
+        "merchant_id": "m_001_drmeera_dentist_delhi",
+        "category_slug": "dentists",
+        "identity": {"name": "Dr. Meera's Dental Clinic", "owner_first_name": "Meera",
+                     "city": "Delhi", "locality": "Lajpat Nagar",
+                     "languages": ["en", "hi"], "verified": True},
+        "subscription": {"status": "active", "plan": "Pro", "days_remaining": 82},
+        "performance": {"views": 2410, "calls": 18, "ctr": 0.021, "leads": 9,
+                        "delta_7d": {"views_pct": 0.18, "calls_pct": -0.05, "ctr_pct": 0.02}},
+        "offers": [{"title": "Dental Cleaning @ ₹299", "status": "active"}],
+        "signals": ["stale_posts:22d", "ctr_below_peer_median", "high_risk_adult_cohort"],
+        "customer_aggregate": {"total_unique_ytd": 540, "lapsed_180d_plus": 78,
+                               "retention_6mo_pct": 0.38, "high_risk_adult_count": 124},
+        "review_themes": [{"theme": "wait_time", "sentiment": "neg", "occurrences_30d": 3,
+                           "common_quote": "had to wait 30 min on Sunday"}],
+        "conversation_history": [],
+    }
+    trigger = {
+        "id": "trg_001_research_digest_dentists",
+        "scope": "merchant", "kind": "research_digest", "source": "external",
+        "merchant_id": "m_001_drmeera_dentist_delhi", "customer_id": None,
+        "payload": {"category": "dentists", "top_item_id": "d_2026W17_jida_fluoride"},
+        "urgency": 2, "suppression_key": "research:dentists:2026-W17",
+    }
 
     try:
-        merchants = json.load(open(dataset / "merchants_seed.json"))["merchants"]
-        triggers  = json.load(open(dataset / "triggers_seed.json"))["triggers"]
-        dentists  = json.load(open(dataset / "categories" / "dentists.json"))
-
-        # Pick merchant + trigger (can change index for different examples)
-        merchant = merchants[0]
-        trigger  = triggers[0]
-
-        result = bot.compose(dentists, merchant, trigger, customer=None)
-        body    = result["body"]
-        cta     = result["cta"]
-        send_as = result["send_as"]
+        result   = bot.compose(dentists, merchant, trigger, customer=None)
+        body     = result["body"]
+        cta      = result["cta"]
+        send_as  = result["send_as"]
         rationale = result["rationale"]
-        status  = "success"
-        error   = ""
+        status   = "success"
+        error    = ""
     except Exception as e:
-        body = rationale = ""
-        cta = send_as = ""
+        body = rationale = cta = send_as = ""
         status = "error"
-        error = str(e)
+        error  = str(e)
 
     color = "#22c55e" if status == "success" else "#ef4444"
     label = "✅ Message Generated" if status == "success" else "❌ Error"
@@ -521,18 +545,18 @@ def healthz():
 @app.route("/v1/metadata", methods=["GET"])
 def metadata():
     return jsonify({
-        "team_name": "Sikka",
+        "team_name": "Vera Decision Engine",
         "team_members": ["Disha Sikka"],
         "model": "mistral-small-latest",
         "approach": (
             "3-layer architecture: (1) pure-logic decision engine selects intent, CTA shape, "
             "and compulsion levers per trigger kind; (2) context builder assembles grounded "
             "fact block — only verified numbers from the 4 contexts, no hallucination; "
-            "(3) Claude at temperature=0 composes the final message constrained strictly to "
+            "(3) Mistral at temperature=0 composes the final message constrained strictly to "
             "the fact block. Auto-reply detection, intent handoff, and graceful exit are "
             "handled as deterministic routing rules, not LLM guesses."
         ),
-        "contact_email": "disha.sikka77@gmail.com",
+        "contact_email": "disha@example.com",
         "version": "1.0.0",
         "submitted_at": datetime.now(timezone.utc).isoformat(),
     })
