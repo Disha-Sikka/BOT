@@ -317,7 +317,7 @@ function addMsg(text,role,showCTA){
   div.className="msg "+role;
   if(role==="vera"){
     var p=document.createElement("div");p.className="sender";p.textContent="Vera";div.appendChild(p);
-    var b=document.createElement("div");b.innerHTML=text.replace(/\n/g,"<br>");div.appendChild(b);
+    var b=document.createElement("div");b.innerHTML=text.split("\n").join("<br>");div.appendChild(b);
     if(showCTA){
       var c=document.createElement("div");c.className="cta-buttons";
       ["YES","STOP","Tell me more"].forEach(function(t){var btn=document.createElement("button");btn.className="cta-btn"+(t==="STOP"?" stop":"");btn.textContent=t;btn.onclick=function(){quick(t);};c.appendChild(btn);});
