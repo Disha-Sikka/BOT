@@ -16,6 +16,8 @@ import urllib.request
 import urllib.error
 from typing import Optional
 from pathlib import Path
+from langchain_mistralai import ChatMistralAI
+from langchain_core.messages import SystemMessage, HumanMessage
 
 # ---------------------------------------------------------------------------
 # Load .env file automatically (put MISTRAL_API_KEY=your-key in a .env file
@@ -182,51 +184,13 @@ def build_context_block(category, merchant, trigger, customer, decision):
 
 
 def call_llm(system: str, user: str) -> str:
-    """
-    Calls Mistral AI API — FREE tier, no credit card needed.
-    Model: mistral-small-latest
-
-    Get your free key (2 minutes):
-      1. Go to https://console.mistral.ai
-      2. Sign up with Google or email (no credit card)
-      3. Go to API Keys section -> Create new key
-      4. Copy the key (starts with ...)
-      5. Add to .env:  MISTRAL_API_KEY=your-key-here
-    """
-    api_key = os.environ.get("MISTRAL_API_KEY", "")
-    if not api_key:
-        raise RuntimeError(
-            "MISTRAL_API_KEY not set.\n"
-            "Get a free key at: https://console.mistral.ai (no credit card)\n"
-            "Add this to your .env: MISTRAL_API_KEY=your-key-here"
-        )
-
-    payload = {
-        "model": "mistral-small-latest",
-        "temperature": 0,
-        "max_tokens": 400,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user",   "content": user},
-        ],
-    }
-    req = urllib.request.Request(
-        "https://api.mistral.ai/v1/chat/completions",
-        data=json.dumps(payload).encode(),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
-        method="POST",
+    llm = ChatMistralAI(
+        model="mistral-small-latest",
+        temperature=0,
+        api_key=os.environ.get("MISTRAL_API_KEY", "")
     )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read())
-            return data["choices"][0]["message"]["content"].strip()
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode()
-        raise RuntimeError(f"Mistral API error {e.code}: {error_body}")
-
+    messages = [SystemMessage(content=system), HumanMessage(content=user)]
+    return llm.invoke(messages).content
 
 def compose(category: dict, merchant: dict, trigger: dict, customer=None) -> dict:
     decision      = decide(trigger, merchant, category, customer)
