@@ -521,9 +521,9 @@ def healthz():
 @app.route("/v1/metadata", methods=["GET"])
 def metadata():
     return jsonify({
-        "team_name": "Vera Decision Engine",
-        "team_members": ["Manorama"],
-        "model": "claude-sonnet-4-20250514",
+        "team_name": "Sikka",
+        "team_members": ["Disha Sikka"],
+        "model": "mistral-small-latest",
         "approach": (
             "3-layer architecture: (1) pure-logic decision engine selects intent, CTA shape, "
             "and compulsion levers per trigger kind; (2) context builder assembles grounded "
@@ -532,7 +532,7 @@ def metadata():
             "the fact block. Auto-reply detection, intent handoff, and graceful exit are "
             "handled as deterministic routing rules, not LLM guesses."
         ),
-        "contact_email": "participant@example.com",
+        "contact_email": "disha.sikka77@gmail.com",
         "version": "1.0.0",
         "submitted_at": datetime.now(timezone.utc).isoformat(),
     })
