@@ -129,7 +129,15 @@ def build_context_block(category, merchant, trigger, customer, decision):
     if peer_ctr and merchant_ctr_val:
         gap_pp = round((peer_ctr - merchant_ctr_val) * 100, 1)
         if gap_pp > 0:
-            lines.append(f"SOCIAL PROOF ANCHOR: Your CTR ({merchant_ctr_val}) is {gap_pp}pp below the {cat_slug} median in your city ({peer_ctr}). Most top performers have active Google posts.")
+            # Compute approximate missed calls
+            views = merchant.get("performance", {}).get("views", 0)
+            missed_calls = round(views * (peer_ctr - merchant_ctr_val)) if views else 0
+            lines.append(
+                f"LOSS FRAMING ANCHOR (use this): Your CTR ({merchant_ctr_val}) is {gap_pp}pp below "
+                f"the {cat_slug} peer median ({peer_ctr}). At your {views} monthly views, "
+                f"that gap costs you ~{missed_calls} calls/month vs top performers. "
+                f"Top performers in your area post weekly on Google."
+            )
     lines.append(f"Catalog offers: {'; '.join(o['title'] for o in category.get('offer_catalog',[])[:5])}")
     if decision["digest"]:
         lines.append("Digest (USE THESE ONLY — do NOT fabricate):")
@@ -253,19 +261,25 @@ def compose(category: dict, merchant: dict, trigger: dict, customer=None) -> dic
         "You are Vera, magicpin's merchant AI assistant. Write specific, grounded WhatsApp messages.\n\n"
         "RULES (violating any = fail):\n"
         "1. Use ONLY facts from context. NEVER invent numbers, names, citations, or offers.\n"
-        "2. One CTA maximum — place it in the LAST sentence.\n"
+        "2. One CTA maximum — place it in the LAST sentence. Make it a specific, low-friction action: "
+        "'Want me to draft this now?', 'Shall I set this up today?', 'Reply YES and I will send in 10 min.'\n"
         "3. Hook immediately — no preambles like 'I hope you are well'.\n"
         "4. No generic phrases: 'increase your sales', 'great opportunity', 'amazing offer'.\n"
+        "4b. Frame numbers as LOSS or GAIN — never as neutral data reports. "
+        "BAD: 'Your CTR is 0.021 vs peer 0.03'. "
+        "GOOD: 'You are missing ~40% of peer-level calls — here is what fixes it.' "
+        "BAD: 'Calls dropped 5%'. "
+        "GOOD: 'You lost ~1 call/day this week vs your own average — this is recoverable.'\n"
         "5. Anchor on at least ONE verifiable number or source from context.\n"
         "6. Match the merchant's language preference (hi-en mix if specified).\n"
         "7. 3-6 sentences — WhatsApp length.\n"
         "8. Output ONLY the message body. No JSON, no labels, no explanation.\n"
         "9. COMPULSION LEVERS — use at least one:\n"
-        "   - Social proof: '3 dentists in your locality did X this month' / 'peer median is Y'\n"
+        "   - Social proof: '3 dentists in Lajpat Nagar added weekly posts this month and closed the CTR gap' / 'peer median is Y — top performers do Z'\n"
         "   - Loss aversion: 'you are missing X' / 'before this window closes'\n"
         "   - Curiosity: 'want to see who?' / 'want the full breakdown?'\n"
         "   - Reciprocity: 'I noticed Y about your account'\n"
-        "   - Effort externalization: 'I have drafted X — just say go'\n"
+        "   - Effort externalization: 'I have already drafted X — just say go' / 'I can set this up in 5 min, just need your approval'\n"
         "   - Asking the merchant: 'what is your most-asked service this week?'\n"
         "10. ANTI-REPETITION: Never repeat a message body already sent in this conversation.\n"
         + (
@@ -308,10 +322,10 @@ def compose(category: dict, merchant: dict, trigger: dict, customer=None) -> dic
         "send_as":         decision["send_as"],
         "suppression_key": trigger.get("suppression_key", f"{kind}:{merchant.get('merchant_id','')}"),
         "rationale":       (
-                            f"Trigger: {kind} (urgency={trigger.get('urgency',2)}/5) for {m_name} ({cat_slug}). "
-                            f"Compulsion levers applied: {', '.join(decision['levers'])}. "
-                            f"send_as={decision['send_as']}, cta={decision['cta']}. "
-                            f"CTR gap: {decision.get('ctr_gap','N/A')}pp vs peer. "
-                            f"Decision: routing to {kind} handler — {'customer-facing outreach' if decision['is_customer_facing'] else 'merchant growth nudge'}."
+                            f"Trigger: {kind} (urgency={trigger.get('urgency',2)}/5) fired for {m_name} ({cat_slug}). "
+                            f"Decision: {'customer-facing — addressing customer by name with slot/service context' if decision['is_customer_facing'] else 'merchant-facing — loss-framed nudge anchored on verified numbers'}. "
+                            f"Levers: {', '.join(decision['levers'])}. CTA: {decision['cta']}. "
+                            f"Why now: {kind} trigger with urgency {trigger.get('urgency',2)}/5 — "
+                            f"{'immediate action window' if trigger.get('urgency',2) >= 3 else 'informational nudge with soft CTA'}."
                         ),
     }
