@@ -16,8 +16,6 @@ import urllib.request
 import urllib.error
 from typing import Optional
 from pathlib import Path
-from langchain_mistralai import ChatMistralAI
-from langchain_core.messages import SystemMessage, HumanMessage
 
 # ---------------------------------------------------------------------------
 # Load .env file automatically (put MISTRAL_API_KEY=your-key in a .env file
@@ -122,7 +120,16 @@ def build_context_block(category, merchant, trigger, customer, decision):
 
     lines = ["=== CATEGORY ==="]
     lines.append(f"Slug: {cat_slug} | Tone: {voice.get('tone','')} | Salutation: {salutation}")
-    lines.append(f"Peer: avg_ctr={peer.get('avg_ctr')}, avg_rating={peer.get('avg_rating')}, avg_reviews={peer.get('avg_review_count')}")
+    lines.append(f"Peer benchmarks (USE FOR SOCIAL PROOF): avg_ctr={peer.get('avg_ctr')}, avg_rating={peer.get('avg_rating')}, avg_reviews={peer.get('avg_review_count')}, avg_views_30d={peer.get('avg_views_30d')}")
+    # Social proof helpers
+    peer_ctr = peer.get('avg_ctr', 0)
+    merchant_ctr_val = merchant.get('performance', {}).get('ctr', 0)
+    peer_reviews = peer.get('avg_review_count', 0)
+    merchant_reviews = len(merchant.get('review_themes', []))
+    if peer_ctr and merchant_ctr_val:
+        gap_pp = round((peer_ctr - merchant_ctr_val) * 100, 1)
+        if gap_pp > 0:
+            lines.append(f"SOCIAL PROOF ANCHOR: Your CTR ({merchant_ctr_val}) is {gap_pp}pp below the {cat_slug} median in your city ({peer_ctr}). Most top performers have active Google posts.")
     lines.append(f"Catalog offers: {'; '.join(o['title'] for o in category.get('offer_catalog',[])[:5])}")
     if decision["digest"]:
         lines.append("Digest (USE THESE ONLY — do NOT fabricate):")
@@ -184,13 +191,51 @@ def build_context_block(category, merchant, trigger, customer, decision):
 
 
 def call_llm(system: str, user: str) -> str:
-    llm = ChatMistralAI(
-        model="mistral-small-latest",
-        temperature=0,
-        api_key=os.environ.get("MISTRAL_API_KEY", "")
+    """
+    Calls Mistral AI API — FREE tier, no credit card needed.
+    Model: mistral-small-latest
+
+    Get your free key (2 minutes):
+      1. Go to https://console.mistral.ai
+      2. Sign up with Google or email (no credit card)
+      3. Go to API Keys section -> Create new key
+      4. Copy the key (starts with ...)
+      5. Add to .env:  MISTRAL_API_KEY=your-key-here
+    """
+    api_key = os.environ.get("MISTRAL_API_KEY", "")
+    if not api_key:
+        raise RuntimeError(
+            "MISTRAL_API_KEY not set.\n"
+            "Get a free key at: https://console.mistral.ai (no credit card)\n"
+            "Add this to your .env: MISTRAL_API_KEY=your-key-here"
+        )
+
+    payload = {
+        "model": "mistral-small-latest",
+        "temperature": 0,
+        "max_tokens": 400,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user",   "content": user},
+        ],
+    }
+    req = urllib.request.Request(
+        "https://api.mistral.ai/v1/chat/completions",
+        data=json.dumps(payload).encode(),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+        method="POST",
     )
-    messages = [SystemMessage(content=system), HumanMessage(content=user)]
-    return llm.invoke(messages).content
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+            return data["choices"][0]["message"]["content"].strip()
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode()
+        raise RuntimeError(f"Mistral API error {e.code}: {error_body}")
+
 
 def compose(category: dict, merchant: dict, trigger: dict, customer=None) -> dict:
     decision      = decide(trigger, merchant, category, customer)
@@ -215,6 +260,14 @@ def compose(category: dict, merchant: dict, trigger: dict, customer=None) -> dic
         "6. Match the merchant's language preference (hi-en mix if specified).\n"
         "7. 3-6 sentences — WhatsApp length.\n"
         "8. Output ONLY the message body. No JSON, no labels, no explanation.\n"
+        "9. COMPULSION LEVERS — use at least one:\n"
+        "   - Social proof: '3 dentists in your locality did X this month' / 'peer median is Y'\n"
+        "   - Loss aversion: 'you are missing X' / 'before this window closes'\n"
+        "   - Curiosity: 'want to see who?' / 'want the full breakdown?'\n"
+        "   - Reciprocity: 'I noticed Y about your account'\n"
+        "   - Effort externalization: 'I have drafted X — just say go'\n"
+        "   - Asking the merchant: 'what is your most-asked service this week?'\n"
+        "10. ANTI-REPETITION: Never repeat a message body already sent in this conversation.\n"
         + (
             "\nCUSTOMER-FACING: No medical claims. Message is FROM the merchant's WhatsApp. "
             "Use customer's name. Match their language pref.\n"
@@ -237,6 +290,16 @@ def compose(category: dict, merchant: dict, trigger: dict, customer=None) -> dic
 
     body = call_llm(system, user)
 
+    # Anti-repetition: regenerate if identical to a recent vera message
+    conv_hist = merchant.get("conversation_history", [])
+    recent_bodies = [h.get("body", "") for h in conv_hist[-5:] if h.get("from") == "vera"]
+    if body.strip() in [b.strip() for b in recent_bodies]:
+        try:
+            user_retry = user + "\n\nIMPORTANT: Write a DIFFERENT angle — the previous message was already sent."
+            body = call_llm(system, user_retry)
+        except Exception:
+            pass
+
     m_name = merchant.get("identity", {}).get("name", "")
     kind   = trigger.get("kind", "")
     return {
@@ -244,7 +307,11 @@ def compose(category: dict, merchant: dict, trigger: dict, customer=None) -> dic
         "cta":             decision["cta"],
         "send_as":         decision["send_as"],
         "suppression_key": trigger.get("suppression_key", f"{kind}:{merchant.get('merchant_id','')}"),
-        "rationale":       (f"Trigger: {kind} for {m_name} ({cat_slug}). "
-                            f"Levers: {', '.join(decision['levers'])}. "
-                            f"send_as={decision['send_as']}, cta={decision['cta']}."),
+        "rationale":       (
+                            f"Trigger: {kind} (urgency={trigger.get('urgency',2)}/5) for {m_name} ({cat_slug}). "
+                            f"Compulsion levers applied: {', '.join(decision['levers'])}. "
+                            f"send_as={decision['send_as']}, cta={decision['cta']}. "
+                            f"CTR gap: {decision.get('ctr_gap','N/A')}pp vs peer. "
+                            f"Decision: routing to {kind} handler — {'customer-facing outreach' if decision['is_customer_facing'] else 'merchant growth nudge'}."
+                        ),
     }

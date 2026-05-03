@@ -452,7 +452,7 @@ def healthz():
 def metadata():
     return jsonify({
         "team_name": "Vera Decision Engine",
-        "team_members": ["Manorama"],
+        "team_members": ["Disha Sikka"],
         "model": "claude-sonnet-4-20250514",
         "approach": (
             "3-layer architecture: (1) pure-logic decision engine selects intent, CTA shape, "
@@ -462,7 +462,7 @@ def metadata():
             "the fact block. Auto-reply detection, intent handoff, and graceful exit are "
             "handled as deterministic routing rules, not LLM guesses."
         ),
-        "contact_email": "participant@example.com",
+        "contact_email": "disha.sikka77@gmail.com",
         "version": "1.0.0",
         "submitted_at": datetime.now(timezone.utc).isoformat(),
     })

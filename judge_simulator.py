@@ -30,7 +30,7 @@ LLM_PROVIDER = "groq"
 LLM_API_KEY = ""  # <-- PUT YOUR API KEY HERE
 
 # Model to use (leave empty for default, or specify like "gpt-4o", "claude-3-5-sonnet-20241022", etc.)
-LLM_MODEL = "llama3-70b-8192"  # <-- Optional: specify model or leave empty for default
+LLM_MODEL = "llama-3.1-70b-versatile"  # <-- Optional: specify model or leave empty for default
 
 # For Ollama only: local server URL
 OLLAMA_URL = "http://localhost:11434"
