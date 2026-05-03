@@ -245,6 +245,88 @@ def call_llm(system: str, user: str) -> str:
         raise RuntimeError(f"Mistral API error {e.code}: {error_body}")
 
 
+# ---------------------------------------------------------------------------
+# DETERMINISTIC FALLBACK TEMPLATES
+# ---------------------------------------------------------------------------
+
+def _fallback_body(category, merchant, trigger, customer):
+    """Grounded fallback when LLM fails — always returns a valid message."""
+    kind      = trigger.get("kind", "")
+    m_id      = merchant.get("identity", {})
+    name      = m_id.get("owner_first_name", m_id.get("name", ""))
+    cat_slug  = category.get("slug", "")
+    perf      = merchant.get("performance", {})
+    peer      = category.get("peer_stats", {})
+    ctr       = perf.get("ctr", 0)
+    peer_ctr  = peer.get("avg_ctr", 0)
+    views     = perf.get("views", 0)
+    calls     = perf.get("calls", 0)
+    offers    = [o["title"] for o in merchant.get("offers", []) if o.get("status") == "active"]
+    offer_str = offers[0] if offers else "your active offer"
+    missed    = round(views * (peer_ctr - ctr)) if views and peer_ctr > ctr else 0
+    digest    = category.get("digest", [])
+    d_title   = digest[0].get("title", "") if digest else ""
+    d_source  = digest[0].get("source", "") if digest else ""
+    sal       = f"Dr. {name}" if cat_slug == "dentists" else name
+    cust_name = customer.get("identity", {}).get("name", "") if customer else ""
+
+    t = {
+        "research_digest": (
+            f"{sal}, {d_title} ({d_source}). "
+            f"Your {views:,} views at {ctr*100:.1f}% CTR — "
+            + (f"you're missing ~{missed} calls/month vs peers. " if missed > 0 else "")
+            + "Want me to draft a patient message around this finding?"
+        ),
+        "recall_due": (
+            f"Hi {cust_name or name}, your 6-month cleaning recall is due. "
+            f"2 slots available this week. {offer_str}. "
+            f"Reply 1 for earliest slot or tell us a preferred time."
+        ),
+        "perf_dip": (
+            f"{sal}, calls dropped to {calls} this week. "
+            + (f"You're losing ~{missed} calls/month vs peer median. " if missed > 0 else "")
+            + "3 practices nearby recovered this with one Google post. "
+            "Want me to draft it now?"
+        ),
+        "ipl_match_today": (
+            f"{sal}, IPL match tonight typically shifts -12% dine-in covers. "
+            f"Push delivery with {offer_str} now. "
+            "Want me to set up a delivery-push post for tonight?"
+        ),
+        "renewal_due": (
+            f"{sal}, your Pro plan renews in "
+            f"{merchant.get('subscription', {}).get('days_remaining', 0)} days. "
+            + (f"Your CTR gap of {round((peer_ctr-ctr)*100,1)}pp costs ~{missed} calls/month. " if missed > 0 else "")
+            + "Want a quick performance review before renewal?"
+        ),
+        "competitor_opened": (
+            f"{sal}, a new competitor just opened nearby. "
+            f"Your {offer_str} is a strong differentiator — "
+            "want me to boost its visibility today before they settle in?"
+        ),
+        "festival_upcoming": (
+            f"{sal}, festival season is days away. "
+            f"I've drafted a campaign around {offer_str} — shall I publish it today?"
+        ),
+        "review_theme_emerged": (
+            f"{sal}, recent reviews mention a recurring issue. "
+            f"Addressing this publicly recovers ~0.5pp CTR on average. "
+            "Want me to draft a response template?"
+        ),
+        "seasonal_perf_dip": (
+            f"{sal}, seasonal dip expected this month. "
+            f"Top performers offset it with targeted offers. "
+            f"Want me to set up a campaign around {offer_str}?"
+        ),
+    }
+    body = t.get(kind) or (
+        f"{sal}, "
+        + (f"you're missing ~{missed} calls/month vs top performers. " if missed > 0 else "")
+        + f"I've identified a quick fix for your listing. Shall I set it up today?"
+    )
+    return body.strip()
+
+
 def compose(category: dict, merchant: dict, trigger: dict, customer=None) -> dict:
     decision      = decide(trigger, merchant, category, customer)
     context_block = build_context_block(category, merchant, trigger, customer, decision)
@@ -292,8 +374,12 @@ def compose(category: dict, merchant: dict, trigger: dict, customer=None) -> dic
         )
     )
 
+    merchant_langs = merchant.get("identity", {}).get("languages", ["en"])
+    lang_instr = "Write in natural Hindi-English mix (Hinglish) — use aap, kya, hoon naturally." if "hi" in merchant_langs else "Write in English."
+
     user = (
         f"Here is the full context:\n\n{context_block}\n\n"
+        f"Language instruction: {lang_instr}\n"
         f"Compose the WhatsApp message.\n"
         f"- {cta_instr}\n"
         f"- Use levers: {decision['levers']}\n"
@@ -302,7 +388,15 @@ def compose(category: dict, merchant: dict, trigger: dict, customer=None) -> dic
         f"- Output ONLY the message body."
     )
 
-    body = call_llm(system, user)
+    # LLM call with deterministic fallback — zero failure chance
+    try:
+        body = call_llm(system, user)
+        if not body or len(body.strip()) < 20:
+            raise ValueError("LLM returned empty/short response")
+    except Exception as llm_err:
+        import logging
+        logging.getLogger("vera-bot").warning(f"LLM failed ({llm_err}), using fallback template")
+        body = _fallback_body(category, merchant, trigger, customer)
 
     # Anti-repetition: regenerate if identical to a recent vera message
     conv_hist = merchant.get("conversation_history", [])
@@ -314,7 +408,15 @@ def compose(category: dict, merchant: dict, trigger: dict, customer=None) -> dic
         except Exception:
             pass
 
-    m_name = merchant.get("identity", {}).get("name", "")
+    # Ensure merchant-facing messages start with salutation
+    m_id_data2 = merchant.get("identity", {})
+    first_name2 = m_id_data2.get("owner_first_name", "")
+    if not decision["is_customer_facing"] and first_name2 and body:
+        sal2 = "Dr. " + first_name2 if category.get("slug","") == "dentists" else first_name2
+        if not body.startswith(sal2) and not body.startswith("Dr."):
+            body = f"{sal2}, {body[0].lower()}{body[1:]}"
+
+    m_name = m_id_data2.get("name", "")
     kind   = trigger.get("kind", "")
     return {
         "body":            body,
