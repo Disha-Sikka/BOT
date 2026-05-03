@@ -14,6 +14,11 @@ from typing import Optional
 from flask import Flask, request, jsonify
 
 import bot
+try:
+    from conversation_handlers import ConversationState, respond as ch_respond
+    USE_CONV_HANDLERS = True
+except ImportError:
+    USE_CONV_HANDLERS = False
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(message)s")
@@ -33,6 +38,7 @@ contexts = {
 }
 
 conversations = {}  # conversation_id → {merchant_id, customer_id, history, suppressed_keys}
+conv_states = {}    # conversation_id → ConversationState (for conversation_handlers)
 merchant_auto_strikes = {}  # merchant_id → cumulative auto-reply strike count
 suppressed = set()  # suppression_keys already sent
 
@@ -135,11 +141,24 @@ def test_compose():
     except Exception as e:
         body = cta = send_as = rationale = ""; status = "error"; error = str(e)
     color = "#22c55e" if status == "success" else "#ef4444"
-    return f"""<!DOCTYPE html><html><head><title>Vera — Live Test</title>
+    status_icon = "&#9989; Generated" if status == "success" else "&#10060; Error"
+    if status == "error":
+        content_html = f'<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px;color:#991b1b"><strong>Error:</strong> {error}</div>'
+    else:
+        cta_class = "binary" if cta == "binary_yes_stop" else "open"
+        content_html = (
+            f'<div class="card"><h3>Message</h3><div class="msg">{body}</div></div>'
+            f'<div class="card"><h3>Properties</h3>'
+            f'<span class="pill vera">{send_as}</span>'
+            f'<span class="pill {cta_class}">{cta}</span></div>'
+            f'<div class="card"><h3>Rationale</h3>'
+            f'<div style="font-size:13px;color:#6b7280">{rationale}</div></div>'
+        )
+    return f"""<!DOCTYPE html><html><head><title>Vera - Live Test</title>
 <style>body{{font-family:Arial,sans-serif;max-width:750px;margin:60px auto;padding:0 20px;background:#f9f9f9}}a.back{{color:#0f4539;font-size:14px;text-decoration:none}}h1{{color:#1a1a1a;margin:16px 0}}.status{{display:inline-block;background:{color};color:white;padding:4px 14px;border-radius:20px;font-size:13px;margin-bottom:20px}}.card{{background:white;border:1px solid #e5e7eb;border-radius:10px;padding:20px;margin-bottom:14px}}.card h3{{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}}.msg{{font-size:15px;line-height:1.7;color:#1a1a1a}}.pill{{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:bold;margin-right:6px}}.vera{{background:#dbeafe;color:#1d4ed8}}.btn{{display:inline-block;margin-top:16px;background:#0f4539;color:white;padding:9px 18px;border-radius:8px;text-decoration:none;font-size:13px}}</style>
 </head><body><a class="back" href="/">&#8592; Back</a><h1>Live Message Test</h1>
-<div class="status">{"&#9989; Generated" if status == "success" else "&#10060; Error"}</div>
-{"<div style=\'background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px;color:#991b1b\'><strong>Error:</strong> " + error + "</div>" if status == "error" else f"<div class=\'card\'><h3>Message</h3><div class=\'msg\'>{body}</div></div><div class=\'card\'><h3>Properties</h3><span class=\'pill vera\'>{send_as}</span><span class=\'pill\'>{cta}</span></div><div class=\'card\'><h3>Rationale</h3><div style=\'font-size:13px;color:#6b7280\'>{rationale}</div></div>"}
+<div class="status">{status_icon}</div>
+{content_html}
 <a class="btn" href="/v1/test">&#8635; Generate Again</a></body></html>"""
 
 
@@ -403,6 +422,19 @@ def tick():
             "suppression_key": sup_key,
             "trigger_id": trigger_id,
         }
+        # Create ConversationState for conversation_handlers
+        if USE_CONV_HANDLERS:
+            state = ConversationState(
+                conversation_id=conv_id,
+                merchant_id=merchant_id,
+                customer_id=customer_id,
+                trigger_id=trigger_id,
+                trigger_kind=trg.get("kind", ""),
+                context_snapshot={"category": category, "merchant": merchant,
+                                   "trigger": trg, "customer": customer}
+            )
+            state.history.append({"role": "vera", "body": result["body"]})
+            conv_states[conv_id] = state
         suppressed.add(sup_key)
 
         actions.append({
@@ -487,9 +519,22 @@ def reply():
 
     conv = conversations.get(conv_id)
     if not conv:
-        # Unknown conv — but still handle STOP/exit properly
+        # === UNKNOWN CONV — auto-reply detection via global merchant tracker ===
+        auto_key = merchant_id or "unknown"
+        if is_auto_reply(message):
+            merchant_auto_strikes[auto_key] = merchant_auto_strikes.get(auto_key, 0) + 1
+            strikes = merchant_auto_strikes[auto_key]
+            if strikes >= 2:
+                merchant_auto_strikes.pop(auto_key, None)
+                return jsonify({"action": "end",
+                                "rationale": f"Auto-reply detected {strikes}x — graceful exit."})
+            return jsonify({"action": "wait",
+                            "rationale": "Auto-reply detected once — waiting before retry."})
+
+        # Exit detection
         if any(p in msg_check for p in ["not interested", "nahi chahiye", "band karo", "stop"]):
             return jsonify({"action": "end", "rationale": "Exit signal in unknown conversation."})
+
         # Try to find merchant from context and generate reply
         merchant = get_context("merchant", merchant_id) if merchant_id else None
         if merchant:
@@ -526,6 +571,33 @@ def reply():
 
     # Add to history
     conv["history"].append({"role": from_role, "body": message})
+
+    # === USE conversation_handlers if state exists ===
+    if USE_CONV_HANDLERS and conv_id in conv_states:
+        state = conv_states[conv_id]
+        result = ch_respond(state, message)
+        action = result.get("action", "send")
+        if action == "end":
+            return jsonify({
+                "action": "end",
+                "rationale": result.get("rationale", "Conversation ended.")
+            })
+        elif action == "wait":
+            return jsonify({
+                "action": "wait",
+                "rationale": result.get("rationale", "Waiting.")
+            })
+        else:
+            # send — but if body is a template placeholder, use compose() to fill it
+            body = result.get("body", "")
+            if body and not body.startswith("__compose__"):
+                return jsonify({
+                    "action": "send",
+                    "body": body,
+                    "cta": result.get("cta", "open_ended"),
+                    "rationale": result.get("rationale", "")
+                })
+        # Fall through to compose() for __compose__ placeholders
 
     # === AUTO-REPLY DETECTION — global + per-conv strikes ===
     verbatim_repeat = sum(1 for h in conv["history"]
