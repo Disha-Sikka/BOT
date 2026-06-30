@@ -113,7 +113,7 @@ def root():
 <style>body{font-family:Arial,sans-serif;max-width:700px;margin:60px auto;padding:0 20px;background:#f9f9f9}h1{font-size:28px}.badge{background:#22c55e;color:white;padding:4px 12px;border-radius:20px;font-size:13px;margin-left:10px}p{color:#555;line-height:1.6}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:32px}.card{background:white;border:1px solid #e5e7eb;border-radius:10px;padding:20px;text-decoration:none;color:inherit;display:block}.card:hover{border-color:#0f4539;box-shadow:0 2px 8px rgba(0,0,0,.1)}.card h3{margin:0 0 6px;font-size:15px}.method{font-size:11px;font-weight:bold;padding:2px 8px;border-radius:4px;margin-right:6px}.get{background:#dcfce7;color:#16a34a}.post{background:#dbeafe;color:#1d4ed8}.card p{font-size:13px;color:#6b7280;margin:6px 0 0}.info{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin-top:24px;font-size:14px}.info strong{color:#15803d}</style>
 </head><body>
 <h1>Vera Bot <span class="badge">&#9679; Live</span></h1>
-<p>magicpin AI Challenge — AI assistant composing grounded WhatsApp messages using 3-layer decision engine + Mistral AI.</p>
+<p>AI assistant composing grounded WhatsApp messages using 3-layer decision engine + Mistral AI.</p>
 <div class="grid">
 <a class="card" href="/v1/healthz"><h3><span class="method get">GET</span>/v1/healthz</h3><p>Liveness check</p></a>
 <a class="card" href="/v1/metadata"><h3><span class="method get">GET</span>/v1/metadata</h3><p>Team info</p></a>
@@ -212,7 +212,7 @@ def chat_page():
 .cta-btn{background:#075e54;color:white;border:none;padding:6px 14px;border-radius:16px;font-size:13px;cursor:pointer}
 .cta-btn.stop{background:#e74c3c}a.home{color:#7effd4;font-size:12px;margin-left:auto;text-decoration:none}
 </style></head><body>
-<div class="topbar"><div class="avatar">V</div><div class="topbar-info"><h2>Vera <span style="font-size:11px;opacity:0.7">by magicpin</span></h2><p>&#9679; online</p></div><a class="home" href="/">Home</a></div>
+<div class="topbar"><div class="avatar">V</div><div class="topbar-info"><h2>Vera <span style="font-size:11px;opacity:0.7"></span></h2><p>&#9679; online</p></div><a class="home" href="/">Home</a></div>
 <div class="bar"><span>You are:</span>
 <select id="sel" onchange="currentMerchant=this.value">
 <option value="dentist">Dr. Meera - Dental Clinic, Delhi</option>
